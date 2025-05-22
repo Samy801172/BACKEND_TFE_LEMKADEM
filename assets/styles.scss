@@ -1,0 +1,121 @@
+@import 'assets/css/reset.css';
+@import 'assets/css/font.css';
+@import 'assets/css/btn.scss';
+
+body {
+  //used
+
+  --theme-blue-dark: #344E5C;
+  --theme-blue-darker: #304556;
+  --theme-blue-clear: #3A5966;
+  --theme-dark-clear: #d2d2d7;
+  --theme-search-bg: #f8f8fc;
+  --theme-aaa: #aaaaaa;
+  --theme-ccc: #cccccc;
+  --theme-ddd: #dddddd;
+  --theme-grey-on-grey: #6e6e73;
+  --theme--input-text: #494949;
+  --theme--input-text: #494949;
+:
+  //used
+  --theme-primary: #3996d2;
+  --theme-pink: #ed576b;
+  --theme-black: #2A2A2E;
+  --theme-dark: #232323;
+  // Standard theme
+  --theme-standard-bg: #f5f5f7;
+  --theme-standard-bg-hover: #fafafa;
+  --theme-standard-write: #5b5e66;
+  --theme-standard-footer-bg: #F5F5F5;
+  --theme-white: #FFFFFF;
+  --theme-eee: #eeeeee;
+  --theme-standard-grey-1: #bdc3c7;
+  --theme-label-text: #86868b;
+  //error color
+  --theme-error-clear: #F76D82;
+  --theme-error-clear-opacity: rgba(247, 109, 130, 0.5);
+  --theme-error-middle: #EC5564;
+  --theme-error-dark: #D94452;
+
+  //success color
+  --theme-success-clear: #62DDBD;
+  --theme-success-middle: #46CEAD;
+  --theme-success-dark: #35BB9B;
+
+  //warning color
+  --theme-warning-clear: #FCD277;
+  --theme-warning-middle: #FECD57;
+  --theme-warning-dark: #F5BA45;
+
+  //info color
+  --theme-info-clear: #73B1F4;
+  --theme-info-middle: #5E9CEA;
+  --theme-info-dark: #4B89DA;
+
+  --var-header-height: 60px;
+  --var-side-menu-full-open: 250px;
+  --var-side-menu--minimal: 60px;
+
+  --transition-smooth: all ease .3s;
+}
+body.dark{
+  --theme-primary: #3996d2;
+  --theme-pink: #ed576b;
+  --theme-black: #1a2226;
+  --theme-dark: #1a2226;
+  // Standard theme
+  --theme-standard-bg: #3e515b;
+  --theme-standard-bg-hover: #2d3b43;
+  --theme-standard-write: #97adba;
+  --theme-standard-footer-bg: #F5F5F5;
+  --theme-white: #2d3b43;
+  --theme-eee: #2d3b43;
+  --theme-standard-grey-1: #bdc3c7;
+  --theme-label-text: #97adba;
+  --theme--input-text: #97adba;
+}
+body {
+  background: var(--theme-standard-bg);
+  overflow-x: hidden;
+  margin: 0;
+  padding: 0;
+  font-weight: 400;
+  font-size: 13px;
+  text-align: center;
+  height: 100%;
+  color: var(--theme--input-text);
+}
+.wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 800px;
+  margin: auto;
+  padding-bottom:1rem;
+}
+
+
+.btn-area{
+  padding-top:20px;
+  app-simple-button{
+    width:300px;
+  }
+}
+.card-title{
+  font-family: 'Lexend-Light';
+  padding-bottom:15px;
+  text-transform: uppercase;
+  color:var(--theme-pink);
+}
+.card-desc{
+  color:var(--theme-standard-write);
+}
+.fc{
+  display: flex;justify-content: center;align-items: center;
+}
+@media screen and (max-width: 600px) {
+  .wrapper {
+    width: 100%;
+    padding: 1rem;
+  }
+}
