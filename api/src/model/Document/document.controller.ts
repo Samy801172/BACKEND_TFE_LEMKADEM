@@ -116,15 +116,10 @@ export class DocumentController {
         order: { id: 'DESC' }
       });
 
-      if (!lastInvoice) {
-        this.logger.error(`Aucune facture trouvée pour l'utilisateur ${user.userId}`);
+      // Vérification robuste : document ET fichier doivent exister
+      if (!lastInvoice || !lastInvoice.file_url || !fs.existsSync(path.resolve(lastInvoice.file_url))) {
+        this.logger.error(`Aucune facture exploitable trouvée pour l'utilisateur ${user.userId}`);
         throw new NotFoundException('Aucune facture trouvée');
-      }
-
-      const filePath = path.resolve(lastInvoice.file_url);
-      if (!fs.existsSync(filePath)) {
-        this.logger.error(`Fichier introuvable: ${filePath}`);
-        throw new NotFoundException('Fichier de la facture introuvable');
       }
 
       await this.mailService.sendMail(

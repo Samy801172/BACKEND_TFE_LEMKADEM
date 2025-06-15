@@ -1,4 +1,11 @@
-import { Controller, Post, Body, UseGuards, Req, Headers, ForbiddenException, Logger, Get, Query } from '@nestjs/common';
+/**
+ * Contrôleur pour la gestion des paiements (Stripe)
+ * - Création de session de paiement
+ * - Webhook Stripe
+ * - Simulation de paiement (dev)
+ * - Succès paiement
+ */
+import { Controller, Post, Body, UseGuards, Req, Headers, ForbiddenException, Get, Query } from '@nestjs/common';
 import { PaymentService } from './services/payment.service';
 import { JwtAuthGuard } from '@feature/security/guards/jwt-auth.guard';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
@@ -11,8 +18,6 @@ import { Request } from 'express';
 @ApiTags('payments')
 @Controller('payments')
 export class PaymentController {
-  private readonly logger = new Logger(PaymentController.name);
-
   constructor(private readonly paymentService: PaymentService) {}
 
   @Post('create-session')
@@ -24,7 +29,6 @@ export class PaymentController {
     @Body('eventId') eventId: string
   ): Promise<{ url: string }> {
     const isAdmin = req.user.role === UserRole.ADMIN;
-    this.logger.log(`Création de session de paiement par ${isAdmin ? 'ADMIN' : 'USER'} pour l'événement: ${eventId}`);
     const url = await this.paymentService.createPaymentSession(eventId, req.user.userId, isAdmin);
     return { url };
   }
@@ -39,21 +43,16 @@ export class PaymentController {
       const payload = (request as any).rawBody;
       
       if (!payload) {
-        this.logger.error('Pas de corps de requête brut trouvé');
         return { received: false, error: 'No raw body found' };
       }
 
       if (!signature) {
-        this.logger.error('Pas de signature Stripe trouvée');
         return { received: false, error: 'No Stripe signature found' };
       }
 
       const result = await this.paymentService.handleWebhook(signature, payload);
-      this.logger.log('Webhook traité avec succès');
       return { received: true, ...result };
     } catch (error) {
-      this.logger.error('Erreur webhook:', error.message);
-      // On renvoie 200 même en cas d'erreur pour éviter les retries de Stripe
       return { 
         received: true, 
         error: error.message,
@@ -71,7 +70,6 @@ export class PaymentController {
     @Body('eventId') eventId: string,
     @Body('userId') userId: string
   ): Promise<{ url: string }> {
-    this.logger.log(`Création de session de paiement par ADMIN pour l'utilisateur: ${userId}, événement: ${eventId}`);
     const url = await this.paymentService.createPaymentSession(eventId, userId, true);
     return { url };
   }
@@ -94,7 +92,6 @@ export class PaymentController {
         data: result
       };
     } catch (error) {
-      this.logger.error('Erreur lors de la simulation du paiement:', error);
       throw error;
     }
   }
@@ -104,7 +101,6 @@ export class PaymentController {
   async handlePaymentSuccess(
     @Query('session_id') sessionId: string
   ) {
-    this.logger.log(`📝 Page de succès accédée avec session: ${sessionId}`);
     return {
       success: true,
       message: 'Paiement effectué avec succès',

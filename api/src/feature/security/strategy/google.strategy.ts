@@ -10,10 +10,8 @@ import { SecurityService } from '../service/security.service';
 @Injectable()
 export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
   constructor(private readonly securityService: SecurityService) {
-    // Ajout de logs pour debug
-    console.log('GOOGLE_CLIENT_ID:', process.env.GOOGLE_CLIENT_ID);
-    console.log('GOOGLE_CLIENT_SECRET:', process.env.GOOGLE_CLIENT_SECRET);
-    console.log('GOOGLE_CALLBACK_URL:', process.env.GOOGLE_CALLBACK_URL);
+    
+    // DEBUG: Affichage des variables d'environnement Google OAuth (à activer uniquement en développement)
     if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET || !process.env.GOOGLE_CALLBACK_URL) {
       throw new Error('Google OAuth env variables are missing!');
     }

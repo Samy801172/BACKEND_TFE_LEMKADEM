@@ -40,8 +40,14 @@ export const typeOrmConfig: TypeOrmModuleOptions = {
   // Options supplémentaires pour la connexion
   extra: {
     connectionTimeoutMillis: 10000, // Timeout de connexion (ms)
-    query_timeout: 10000            // Timeout de requête (ms)
+    query_timeout: 10000,           // Timeout de requête (ms)
+    ssl: {
+      rejectUnauthorized: false     // Désactive la vérification stricte du certificat SSL (utile pour Render)
+    }
   },
+
+  // Active la connexion SSL (obligatoire pour Render)
+  ssl: true,
 
   // N'exécute pas automatiquement les migrations au démarrage
   migrationsRun: false

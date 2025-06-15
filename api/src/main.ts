@@ -1,3 +1,4 @@
+// Point d'entrée principal de l'application NestJS. Configure les middlewares, la sécurité, la documentation Swagger et démarre le serveur.
 import { NestFactory } from '@nestjs/core';
 import { ApiInterceptor, HttpExceptionFilter, swaggerConfiguration } from '@common/config';
 import { ValidationPipe, Logger, BadRequestException } from '@nestjs/common';
@@ -8,18 +9,40 @@ import helmet from 'helmet';
 import { rateLimit } from 'express-rate-limit';
 import { json } from 'express';
 import * as express from 'express';
+import { join } from 'path';
+import { NestExpressApplication } from '@nestjs/platform-express';
 
 const bootstrap = async () => {
   try {
-    console.log('=== BACKEND DEMARRÉ ICI ===');
-    const app = await NestFactory.create(AppModule, {
+    const app = await NestFactory.create<NestExpressApplication>(AppModule, {
       logger: ['error', 'warn', 'debug', 'log', 'verbose'], // Activer tous les niveaux de log
       rawBody: true // Ajouter cette ligne
     });
     
-    // Configuration CORS plus permissive pour le développement
+    // Middleware OPTIONS tout de suite après la création de l'app
+    app.use((req, res, next) => {
+      // Liste des origines autorisées (localhost pour dev, GitHub Pages pour prod)
+      const allowedOrigins = ['http://localhost:4200', 'https://samy801172.github.io'];
+      const origin = req.headers.origin;
+      if (req.method === 'OPTIONS') {
+        // Si l'origine de la requête est autorisée, on l'ajoute dans le header
+        if (allowedOrigins.includes(origin)) {
+          res.header('Access-Control-Allow-Origin', origin);
+        }
+        // Autoriser les méthodes et headers nécessaires
+        res.header('Access-Control-Allow-Methods', 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS');
+        res.header('Access-Control-Allow-Headers', 'Content-Type, Accept, Authorization, stripe-signature');
+        res.header('Access-Control-Allow-Credentials', 'true');
+        // Répondre immédiatement pour les préflight requests
+        return res.sendStatus(204);
+      }
+      next();
+    });
+
+    // CORS : autorise les requêtes du front local (localhost:4200) et de GitHub Pages (samy801172.github.io)
+    // Indispensable pour que le frontend Angular déployé sur GitHub Pages puisse accéder à l'API sur Render
     app.enableCors({
-      origin: '*', // Permettre toutes les origines
+      origin: ['http://localhost:4200','https://samy801172.github.io','https://samy801172.github.io/api'], // Permettre uniquement l'origine du front
       methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
       allowedHeaders: ['Content-Type', 'Accept', 'Authorization', 'stripe-signature'],
       credentials: true,
@@ -33,7 +56,7 @@ const bootstrap = async () => {
     // Limite le nombre de requêtes par IP
     app.use(rateLimit({
       windowMs: 15 * 60 * 1000, // 15 minute window
-      max: 100 // Maximum 100 requests per window
+      max: process.env.NODE_ENV === 'production' ? 100 : 1000 // 1000 en dev, 100 en prod
     }));
 
     // Configuration pour Stripe webhooks - AVANT les autres middlewares
@@ -50,6 +73,13 @@ const bootstrap = async () => {
 
     // Configuration globale pour les autres routes - APRÈS le middleware webhook
     app.use(express.json());
+
+    // Expose le dossier public/members à l'URL /membres
+    // Cela permet d'accéder aux photos de profil uploadées via http://localhost:2024/membres/nomDeLaPhoto.jpg
+    console.log('Dossier statique exposé:', join(process.cwd(), 'public', 'members'));
+    app.useStaticAssets(join(process.cwd(), 'public', 'members'), {
+      prefix: '/membres/',
+    });
 
     app.useGlobalInterceptors(new ApiInterceptor());
     app.useGlobalFilters(new HttpExceptionFilter());

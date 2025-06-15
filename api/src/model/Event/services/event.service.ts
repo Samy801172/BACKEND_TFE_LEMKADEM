@@ -1,4 +1,4 @@
-import { Injectable, Logger, ForbiddenException, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, ForbiddenException, NotFoundException, ConflictException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Event } from '../entities/event.entity';
@@ -16,8 +16,6 @@ import { User } from '../../User/entities/user.entity';
 
 @Injectable()
 export class EventService {
-  private readonly logger = new Logger(EventService.name);
-
   constructor(
     @InjectRepository(Event)
     private eventRepository: Repository<Event>,
@@ -68,7 +66,8 @@ export class EventService {
           `<p>Un nouvel événement a été créé : <strong>${createEventDto.title}</strong></p>`
         );
       } catch (error) {
-        console.error(`Erreur lors de l'envoi de l'email à ${member.email}:`, error);
+        // DEBUG: Erreur lors de l'envoi de l'email à un membre (à activer uniquement en développement)
+        // console.error(`Erreur lors de l'envoi de l'email à ${member.email}:`, error);
       }
     }
 
@@ -99,7 +98,6 @@ export class EventService {
 
     // Si rien n'a changé, retourner l'événement sans envoyer d'email
     if (!hasChanged) {
-      this.logger.log(`Aucune modification détectée pour l'événement ${id}, aucun email envoyé.`);
       return currentEvent;
     }
 
@@ -113,7 +111,6 @@ export class EventService {
     });
 
     for (const participation of participations) {
-      this.logger.log('Participation:', JSON.stringify(participation));
       if (participation.participant?.email) {
         await this.mailService.sendMail(
           participation.participant.email,
@@ -129,8 +126,6 @@ export class EventService {
 
   // Méthode pour supprimer un événement
   async remove(id: string, userId: string, userRole: string): Promise<void> {
-    this.logger.debug(`Tentative de suppression de l'événement ${id} par l'utilisateur ${userId}`);
-
     // 1. Vérifier que l'événement existe
     const event = await this.eventRepository.findOne({
       where: { id },
@@ -138,28 +133,23 @@ export class EventService {
     });
 
     if (!event) {
-      this.logger.warn(`Tentative de suppression d'un événement inexistant: ${id}`);
       throw new NotFoundException('Événement non trouvé');
     }
 
     // 2. Vérifier que l'utilisateur est l'organisateur ou un admin
     if (event.organizer.id !== userId && userRole !== 'ADMIN') {
-      this.logger.warn(`Tentative de suppression non autorisée par l'utilisateur ${userId}`);
       throw new ForbiddenException('Vous n\'êtes pas autorisé à supprimer cet événement');
     }
 
     // 3. Vérifier qu'il n'y a pas de participants inscrits
     if (event.participations && event.participations.length > 0) {
-      this.logger.warn(`Tentative de suppression d'un événement avec des participants: ${id}`);
       throw new ForbiddenException('Impossible de supprimer un événement avec des participants inscrits');
     }
 
     // 4. Supprimer l'événement
     try {
       await this.eventRepository.delete(id);
-      this.logger.log(`Événement ${id} supprimé avec succès par l'utilisateur ${userId}`);
     } catch (error) {
-      this.logger.error(`Erreur lors de la suppression de l'événement ${id}: ${error.message}`);
       throw error;
     }
   }
@@ -217,10 +207,8 @@ export class EventService {
         .orderBy('event.date', 'ASC')
         .getMany();
 
-      this.logger.debug(`Found ${events.length} upcoming events`);
       return events;
     } catch (error) {
-      this.logger.error(`Failed to get upcoming events: ${error.message}`);
       throw error;
     }
   }
@@ -228,8 +216,6 @@ export class EventService {
   // Méthode pour les événements auxquels un utilisateur est inscrit
   async getRegisteredEvents(userId: string): Promise<EventWithCalendarDto[]> {
     try {
-      this.logger.debug(`Getting registered events for user: ${userId}`);
-      
       const participations = await this.participationRepository
         .createQueryBuilder('participation')
         .leftJoinAndSelect('participation.event', 'event')
@@ -242,10 +228,8 @@ export class EventService {
         return new EventWithCalendarDto(participation.event, participation);
       });
 
-      this.logger.debug(`Found ${eventsWithCalendar.length} registered events for user ${userId}`);
       return eventsWithCalendar;
     } catch (error) {
-      this.logger.error(`Failed to get registered events: ${error.message}`);
       throw error;
     }
   }
@@ -264,7 +248,6 @@ export class EventService {
       
       return await this.participationRepository.save(participation);
     } catch (error) {
-      this.logger.error(`Erreur lors de l'approbation de la participation: ${error.message}`);
       throw error;
     }
   }
@@ -288,7 +271,6 @@ export class EventService {
 
     // 3. Parcourir les participations pour notifier et rembourser si besoin
     for (const participation of event.participations) {
-      this.logger.log('Participation:', JSON.stringify(participation));
       if (participation.participant?.email) {
         let message = `Cher membre, l'événement "${event.title}" auquel vous étiez inscrit a été annulé.`;
         let htmlMessage = `<p>Cher membre, l'événement <strong>${event.title}</strong> auquel vous étiez inscrit a été annulé.</p>`;
@@ -302,9 +284,7 @@ export class EventService {
 
             message += ' Un remboursement va vous être effectué sous peu.';
             htmlMessage += '<p>Un remboursement va vous être effectué sous peu.</p>';
-            this.logger.log(`✅ Remboursement effectué pour ${participation.participant.email}`);
           } catch (err) {
-            this.logger.error(`❌ Erreur lors du remboursement pour ${participation.participant.email}: ${err.message}`);
             message += ' Une erreur est survenue lors du remboursement, veuillez contacter le support.';
             htmlMessage += '<p>Une erreur est survenue lors du remboursement, veuillez contacter le support.</p>';
           }
@@ -318,19 +298,15 @@ export class EventService {
             message,
             htmlMessage
           );
-          this.logger.log(`Mail envoyé à ${participation.participant.email}`);
         } catch (err) {
-          this.logger.error(`Erreur lors de l'envoi du mail à ${participation.participant.email}: ${err.message}`);
         }
       } else {
-        this.logger.warn(`Aucun email trouvé pour la participation: ${JSON.stringify(participation)}`);
       }
     }
 
     // 4. Mettre à jour les paiements liés à l'événement (sécurité)
     await this.paymentService.refundAllPaymentsForEvent(event.id);
 
-    this.logger.log(`Événement ${id} annulé (soft delete), notifications et remboursements Stripe traités`);
     return { success: true, message: 'Événement annulé, notifications et remboursements Stripe effectués' };
   }
 } 

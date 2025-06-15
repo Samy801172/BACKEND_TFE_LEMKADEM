@@ -8,7 +8,10 @@ import { User } from '../User/entities/user.entity';
 import { EventParticipation } from '../Event/entities/event-participation.entity';
 import { ConfigModule } from '@nestjs/config';
 import { Document } from '../Document/entities/document.entity';
+import { MailModule } from '../../common/services/mail.module';
+import { NotificationModule } from '@model/Notification/notification.module';
 
+// Module Payment : centralise les providers, controllers et services liés au paiement (Stripe, factures, remboursements)
 @Module({
   imports: [
     TypeOrmModule.forFeature([
@@ -18,7 +21,9 @@ import { Document } from '../Document/entities/document.entity';
       EventParticipation,
       Document
     ]),
-    ConfigModule
+    ConfigModule,
+    MailModule,
+    NotificationModule
   ],
   controllers: [PaymentController],
   providers: [PaymentService],

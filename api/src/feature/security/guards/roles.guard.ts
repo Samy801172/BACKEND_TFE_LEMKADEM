@@ -40,8 +40,8 @@ export class RolesGuard implements CanActivate {
       return true;
     }
     
-    // Vérifie si l'utilisateur a l'un des rôles requis
-    const hasRole = requiredRoles.some((role) => user.role === role);
+    // Vérifie si l'utilisateur a l'un des rôles requis (insensible à la casse)
+    const hasRole = requiredRoles.some((role) => String(user.role).toUpperCase() === String(role).toUpperCase());
     this.logger.debug('Has required role:', hasRole);
 
     return hasRole;

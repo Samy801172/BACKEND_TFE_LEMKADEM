@@ -31,13 +31,11 @@ class ConfigManager {
   }
 
   private setupJwtConfig() {
-    // Log de la configuration JWT pour le debugging
-    console.log('Configuration JWT au démarrage:', {
-      hasSecret: !!process.env.JWT_TOKEN_SECRET,
-      hasExpireIn: !!process.env.JWT_TOKEN_EXPIRE_IN
-    });
-
-    // --- Correction : avertissement déplacé dans le constructeur pour forcer l'arrêt si secret trop court ---
+    // DEBUG: Affichage de la configuration JWT au démarrage (à activer uniquement en développement)
+    // console.log('Configuration JWT au démarrage:', {
+    //   hasSecret: !!process.env.JWT_TOKEN_SECRET,
+    //   hasExpireIn: !!process.env.JWT_TOKEN_EXPIRE_IN
+    // });
   }
 
   private ensureValues(keys: ConfigKey[]) {
@@ -62,7 +60,7 @@ class ConfigManager {
   public getValue(key: ConfigKey): string {
     const value = process.env[key];
     if (!value) {
-      console.log(`Warning: ${key} not found, trying alternative names...`);
+      // DEBUG: Warning: clé d'environnement non trouvée, tentative avec d'autres noms (à activer uniquement en développement)
       // Essayer d'autres noms possibles
       if (key === ConfigKey.DB_USER && process.env.DB_USERNAME) {
         return process.env.DB_USERNAME;

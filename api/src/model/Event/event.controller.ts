@@ -29,7 +29,8 @@ export class EventController {
   @Roles(UserRole.ADMIN, UserRole.ORGANIZER)
   @ApiResponse({ status: 201, description: 'Événement créé avec succès' })
   async create(@Request() req, @Body() createEventDto: CreateEventDto) {
-    console.log('User data:', req.user);
+    // DEBUG: Affichage des données utilisateur lors de la création d'un événement (à activer uniquement en développement)
+    // console.log('User data:', req.user);
     return this.eventService.create(createEventDto, req.user.userId);
   }
 

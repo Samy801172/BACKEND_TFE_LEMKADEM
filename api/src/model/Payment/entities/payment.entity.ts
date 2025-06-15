@@ -1,7 +1,15 @@
+/**
+ * Entité Payment : représente un paiement Stripe pour un événement
+ * - Lié à un utilisateur et un événement
+ * - Stocke le statut, le montant, la référence, etc.
+ */
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, CreateDateColumn } from 'typeorm';
 import { User } from '../../User/entities/user.entity';
 import { Event } from '../../Event/entities/event.entity';
 
+/**
+ * Statut d'une transaction de paiement Stripe
+ */
 export enum PaymentTransactionStatus {
   PENDING = 'PENDING',
   COMPLETED = 'COMPLETED',

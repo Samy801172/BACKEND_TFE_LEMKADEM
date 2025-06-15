@@ -1,4 +1,11 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+/**
+ * Service de gestion des paiements Stripe et de la facturation
+ * - Création de session Stripe
+ * - Gestion des webhooks
+ * - Génération de factures PDF
+ * - Remboursements
+ */
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Payment, PaymentTransactionStatus } from '../entities/payment.entity';
@@ -11,11 +18,13 @@ import { MoreThan, LessThan, In } from 'typeorm';
 const PDFDocument = require('pdfkit');
 import * as fs from 'fs';
 import { Document, DocumentType } from '../../Document/entities/document.entity';
+import { MailService } from '../../../common/services/mail.service';
+import { NotificationService } from '@common/services/notification.service';
+import { NotificationType } from '../../Notification/entities/notification.entity';
 
 @Injectable()
 export class PaymentService {
   private readonly stripe: Stripe;
-  private readonly logger = new Logger(PaymentService.name);
 
   constructor(
     @InjectRepository(Payment)
@@ -26,9 +35,11 @@ export class PaymentService {
     private readonly userRepository: Repository<User>,
     @InjectRepository(EventParticipation)
     private readonly participationRepository: Repository<EventParticipation>,
-    private readonly configService: ConfigService,
     @InjectRepository(Document)
-    private readonly documentRepository: Repository<Document>
+    private readonly documentRepository: Repository<Document>,
+    private readonly configService: ConfigService,
+    private readonly mailService: MailService,
+    private readonly notificationService: NotificationService
   ) {
     // Initialisation de Stripe avec la clé secrète
     const stripeKey = this.configService.get<string>('STRIPE_SECRET_KEY');
@@ -41,9 +52,7 @@ export class PaymentService {
       this.stripe = new Stripe(stripeKey.trim(), {
         apiVersion: '2025-02-24.acacia'
       });
-      this.logger.log('✅ Stripe initialized successfully');
     } catch (error) {
-      this.logger.error('❌ Stripe initialization error:', error);
       throw error;
     }
   }
@@ -67,7 +76,6 @@ export class PaymentService {
 
       // 2. Vérification des droits administrateur
       const isAdminUser = isAdmin || user.type_user === 'ADMIN';
-      this.logger.log(`👤 Création de session par ${isAdminUser ? 'ADMIN' : 'USER'}: ${user.email}`);
 
       // 3. Vérification de la participation existante
       const existingParticipation = await this.participationRepository.findOne({
@@ -87,7 +95,6 @@ export class PaymentService {
       });
 
       if (completedPayment && !isAdminUser) {
-        this.logger.warn(`❌ L'utilisateur a déjà payé pour cet événement: ${event.title}`);
         throw new Error('Vous avez déjà payé pour cet événement');
       }
 
@@ -98,7 +105,6 @@ export class PaymentService {
         });
 
         if (participantCount >= event.max_participants && !isAdminUser) {
-          this.logger.warn(`❌ L'événement est complet: ${event.title}`);
           throw new Error('Cet événement est complet');
         }
       }
@@ -117,7 +123,6 @@ export class PaymentService {
       });
 
       if (pendingPayment && !isAdminUser) {
-        this.logger.warn(`⚠️ Une session de paiement est déjà en cours`);
         throw new Error('Vous avez déjà une session de paiement en cours. Veuillez la terminer ou attendre qu\'elle expire.');
       }
 
@@ -159,11 +164,8 @@ export class PaymentService {
 
       await this.paymentRepository.save(payment);
       
-      this.logger.log(`✅ Payment session created for ${user.email} with reference ${reference}: ${session.url}`);
-      
       return session.url; // Retourne l'URL de paiement Stripe
     } catch (error) {
-      this.logger.error(`❌ Error creating payment session: ${error.message}`);
       throw error;
     }
   }
@@ -190,13 +192,11 @@ export class PaymentService {
     try {
       // 1. Vérification de base
       if (!rawBody) {
-        this.logger.error('❌ Pas de corps de requête');
         return { received: false, error: 'No request body' };
       }
 
       // 2. Log du payload reçu pour debug
       const payload = JSON.parse(rawBody.toString());
-      this.logger.log(`🔔 Webhook reçu: ${payload.type} - ID: ${payload.id}`);
 
       // 3. Vérification de la signature uniquement pour les événements de production
       const webhookSecret = this.configService.get('STRIPE_WEBHOOK_SECRET');
@@ -210,41 +210,33 @@ export class PaymentService {
             webhookSecret
           );
         } catch (err) {
-          this.logger.error(`❌ Erreur de signature: ${err.message}`);
           return { received: false, error: 'Invalid signature' };
         }
       } else {
         // En mode test, on accepte sans vérification
         event = payload;
-        this.logger.log('ℹ️ Mode test détecté - signature ignorée');
       }
 
       // 4. Traitement des événements
       switch (event.type) {
         case 'checkout.session.completed':
-          this.logger.log(`💰 Traitement du paiement réussi - Session ID: ${event.id}`);
           await this.handleSuccessfulPayment(event.data.object);
           break;
 
         case 'checkout.session.expired':
-          this.logger.log(`⏰ Session expirée - Session ID: ${event.id}`);
           await this.handleExpiredSession(event.data.object);
           break;
 
         case 'payment_intent.payment_failed':
-          this.logger.log(`❌ Échec du paiement - Intent ID: ${event.id}`);
           await this.handlePaymentFailure(event.data.object.id);
           break;
 
         default:
-          this.logger.debug(`ℹ️ Événement ignoré: ${event.type} - ID: ${event.id}`);
           break;
       }
 
       return { received: true, type: event.type };
     } catch (err) {
-      this.logger.error(`❌ Erreur webhook: ${err.message}`, err.stack);
-      // On retourne quand même 200 pour éviter les retries de Stripe
       return { received: false, error: err.message };
     }
   }
@@ -266,10 +258,8 @@ export class PaymentService {
 
       if (!payment) {
         if (isTestSession) {
-          this.logger.log(`ℹ️ Session de test détectée: ${session.id}`);
           return { received: true };
         } else {
-          this.logger.error(`❌ Paiement non trouvé pour la session: ${session.id}`);
           return;
         }
       }
@@ -304,7 +294,6 @@ export class PaymentService {
       }
 
       await this.participationRepository.save(participation);
-      this.logger.log(`✅ Paiement complété pour: ${payment.user.email}`);
 
       // Génération et enregistrement de la facture PDF
       const invoicePath = `uploads/invoices/invoice-${payment.id}.pdf`;
@@ -326,8 +315,37 @@ export class PaymentService {
         }
       });
       await this.documentRepository.save(document);
+
+      // Envoi d'un email de confirmation de paiement
+      await this.mailService.sendMail(
+        payment.user.email,
+        'Confirmation de paiement',
+        `Votre paiement pour l'événement "${payment.event.title}" a été reçu avec succès.`,
+        `
+          <h1>Confirmation de paiement</h1>
+          <p>Bonjour,</p>
+          <p>Nous vous confirmons la bonne réception de votre paiement pour l'événement <strong>${payment.event.title}</strong>.</p>
+          <p>Détails du paiement :</p>
+          <ul>
+            <li>Montant : ${payment.amount}€</li>
+            <li>Référence : ${payment.reference}</li>
+            <li>Date : ${payment.completedAt.toLocaleDateString()}</li>
+          </ul>
+          <p>Une facture a été générée et est disponible dans votre espace personnel.</p>
+          <p>Nous vous remercions de votre confiance et vous souhaitons une excellente expérience lors de l'événement !</p>
+        `
+      );
+
+      // Ajout : Création d'une notification persistante pour l'utilisateur
+      await this.notificationService.createNotification(
+        payment.user,
+        NotificationType.PARTICIPATION_STATUS,
+        'Facture envoyée',
+        `Votre facture pour l'événement "${payment.event.title}" a été générée et envoyée par email.`,
+        { paymentId: payment.id, eventId: payment.event.id }
+      );
     } catch (error) {
-      this.logger.error(`❌ Erreur lors du traitement du paiement réussi: ${error.message}`);
+      throw error;
     }
   }
 
@@ -343,7 +361,6 @@ export class PaymentService {
     if (payment) {
       payment.status = PaymentTransactionStatus.FAILED;
       await this.paymentRepository.save(payment);
-      this.logger.warn(`⚠️ Session expirée pour: ${payment.transaction_id}`);
     }
   }
 
@@ -365,10 +382,7 @@ export class PaymentService {
       participation.payment_status = PaymentStatus.PAID;
 
       await this.participationRepository.save(participation);
-      
-      this.logger.log(`✅ Paiement validé pour la participation: ${participation.id}`);
     } catch (error) {
-      this.logger.error(`Erreur lors du traitement du paiement: ${error.message}`);
       throw error;
     }
   }
@@ -389,10 +403,7 @@ export class PaymentService {
 
       participation.payment_status = PaymentStatus.FAILED;
       await this.participationRepository.save(participation);
-      
-      this.logger.warn(`⚠️ Échec du paiement pour la participation: ${participation.id}`);
     } catch (error) {
-      this.logger.error(`Erreur lors du traitement de l'échec du paiement: ${error.message}`);
       throw error;
     }
   }
@@ -443,14 +454,11 @@ export class PaymentService {
 
       await this.paymentRepository.save(payment);
 
-      this.logger.log(`✅ Simulation de paiement réussie pour l'événement: ${eventId}`);
-
       return {
         participation,
         payment
       };
     } catch (error) {
-      this.logger.error(`❌ Erreur lors de la simulation du paiement: ${error.message}`);
       throw error;
     }
   }
@@ -492,12 +500,10 @@ export class PaymentService {
         // 4. Mettre à jour le statut du paiement en base
         payment.status = PaymentTransactionStatus.REFUNDED;
         await this.paymentRepository.save(payment);
-        this.logger.log(`✅ Remboursement Stripe effectué pour le paiement ${payment.id} (participant: ${participantId}, event: ${eventId})`);
       } else {
         throw new Error(`Le remboursement Stripe n'a pas réussi: ${refund.status}`);
       }
     } catch (err) {
-      this.logger.error(`Erreur lors du remboursement Stripe: ${err.message}`);
       throw err;
     }
   }
@@ -520,7 +526,6 @@ export class PaymentService {
 
     payment.status = status;
     await this.paymentRepository.save(payment);
-    this.logger.log(`✅ Statut du paiement mis à jour à ${status} pour le paiement ${payment.id}`);
   }
 
   async refundAllPaymentsForEvent(eventId: string): Promise<void> {
@@ -531,7 +536,6 @@ export class PaymentService {
       .where('eventId = :eventId', { eventId })
       .andWhere('status = :status', { status: PaymentTransactionStatus.COMPLETED })
       .execute();
-    console.log('Paiements mis à jour:', result.affected);
   }
 
   // Ajout de la méthode utilitaire pour générer la facture PDF
@@ -571,7 +575,6 @@ export class PaymentService {
         writeStream.on('error', reject);
       });
     } catch (error) {
-      this.logger.error(`❌ Erreur lors de la génération du PDF: ${error.message}`);
       throw error;
     }
   }

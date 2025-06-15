@@ -36,7 +36,8 @@ export class MessageService {
       
       return await this.messageRepository.save(message);
     } catch (error) {
-      console.error('Erreur lors de la création du message:', error);
+      // DEBUG: Erreur lors de la création du message (à activer uniquement en développement)
+      // console.error('Erreur lors de la création du message:', error);
       throw error;
     }
   }
@@ -93,23 +94,24 @@ export class MessageService {
    * @param messageId ID du message à supprimer
    * @returns Confirmation de suppression
    */
-  async deleteMessage(userId: string, messageId: string): Promise<{ success: boolean; message: string }> {
+  async deleteMessage(userId: string, messageId: string): Promise<{ success: boolean; message: string; deletedAs: 'sender' | 'receiver' }> {
     const message = await this.messageRepository.findOne({
       where: { id: messageId },
-      relations: ['sender']
+      relations: ['sender', 'receiver']
     });
     
     if (!message) {
       throw new NotFoundException('Message not found');
     }
     
-    // Vérifier que l'utilisateur est bien l'expéditeur
-    if (message.sender.id !== userId) {
-      throw new ForbiddenException('You can only delete your own messages');
+    // Permet la suppression si l'utilisateur est l'expéditeur OU le destinataire
+    if (message.sender.id !== userId && message.receiver.id !== userId) {
+      throw new ForbiddenException('You can only delete messages you sent or received');
     }
     
+    const deletedAs = message.sender.id === userId ? 'sender' : 'receiver';
     await this.messageRepository.remove(message);
-    return { success: true, message: 'Message deleted successfully' };
+    return { success: true, message: 'Message deleted successfully', deletedAs };
   }
 
   async findUserMessages(userId: string): Promise<Message[]> {
@@ -308,6 +310,32 @@ export class MessageService {
         is_read: false
       },
       relations: ['sender', 'receiver'],
+      order: { createdAt: 'DESC' }
+    });
+  }
+
+  /**
+   * Récupère tous les messages reçus par l'utilisateur
+   * @param userId ID de l'utilisateur connecté
+   * @returns Liste des messages reçus, triés du plus récent au plus ancien
+   */
+  async getReceivedMessages(userId: string): Promise<Message[]> {
+    return this.messageRepository.find({
+      where: { receiver: { id: userId } },
+      relations: ['sender'],
+      order: { createdAt: 'DESC' }
+    });
+  }
+
+  /**
+   * Récupère tous les messages envoyés par l'utilisateur
+   * @param userId ID de l'utilisateur connecté
+   * @returns Liste des messages envoyés, triés du plus récent au plus ancien
+   */
+  async getSentMessages(userId: string): Promise<Message[]> {
+    return this.messageRepository.find({
+      where: { sender: { id: userId } },
+      relations: ['receiver'],
       order: { createdAt: 'DESC' }
     });
   }

@@ -4,6 +4,7 @@ import { WebhookService } from './webhook.service';
 import { ConfigModule } from '@nestjs/config';
 import { PaymentModule } from '../Payment/payment.module';
 
+// Module Webhook : centralise les providers, controllers et services liés à la gestion des webhooks externes (GitHub, Stripe, etc.)
 @Module({
   imports: [
     ConfigModule,

@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, NestModule, MiddlewareConsumer } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { typeOrmConfig } from '../../common/config/typeorm.config';
 import { UserModule } from '../../model/User/user.module';
@@ -12,6 +12,8 @@ import { DocumentModule } from '../../model/Document/document.module';
 import { SecurityModule } from '../security/security.module';
 import { AccountModule } from '../../model/Account/account.module';
 import { MailModule } from '@common/services/mail.module';
+import { ContactModule } from '@model/Contact/contact.module';
+import { DynamicCorsMiddleware } from '../../common/middleware/dynamic-cors.middleware';
 
 @Module({
   imports: [
@@ -26,9 +28,15 @@ import { MailModule } from '@common/services/mail.module';
     DocumentModule,
     SecurityModule,
     AccountModule,
-  MailModule
+    MailModule,
+    ContactModule
   ],
   controllers: [],
   providers: []
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    // Applique le middleware CORS dynamique à toutes les routes
+    consumer.apply(DynamicCorsMiddleware).forRoutes('*');
+  }
+}
