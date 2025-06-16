@@ -228,10 +228,10 @@ export class SecurityController {
       
       // Rediriger vers le frontend avec le token
       // Note: Le token est stocké dans la propriété 'token' de l'entité Token
-      res.redirect(`http://localhost:4200/auth/google/callback?token=${token.token}`);
+      res.redirect(`https://samy801172.github.io/Stage_TFE_2025_Lemkadem_Abdeljalil/auth/google/callback?token=${token.token}`);
     } catch (error) {
       // En cas d'erreur, rediriger vers la page de login avec un message d'erreur
-      res.redirect('http://localhost:4200/login?error=auth_failed');
+      res.redirect('https://samy801172.github.io/Stage_TFE_2025_Lemkadem_Abdeljalil/auth/login?error=auth_failed');
     }
   }
 
