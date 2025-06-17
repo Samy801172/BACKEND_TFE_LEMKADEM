@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Put, Param, Delete, UseGuards, NotFoundException, Patch, Req, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { Controller, Get, Post, Body, Put, Param, Delete, UseGuards, NotFoundException, Patch, Req, UseInterceptors, UploadedFile, BadRequestException } from '@nestjs/common';
 import { UserService } from './user.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -133,16 +133,22 @@ export class UserController {
 
   @UseGuards(JwtAuthGuard)
   @Post('profile/photo')
+  // Limite la taille de la photo de profil à 2 Mo maximum (empêche l'erreur 413 si l'image est trop grosse)
   @UseInterceptors(FileInterceptor('photo', {
     storage: diskStorage({
-      destination: './public/members', // ou le dossier de ton choix
+      destination: './public/members',
       filename: (req, file, cb) => {
         const ext = path.extname(file.originalname);
         cb(null, req.user.userId + '-' + Date.now() + ext);
       }
-    })
+    }),
+    limits: { fileSize: 2 * 1024 * 1024 } // 2 Mo
   }))
   async uploadPhoto(@UploadedFile() file: any, @Req() req) {
+    console.log('Fichier reçu:', file);
+    if (!file) {
+      throw new BadRequestException('Aucun fichier reçu');
+    }
     await this.userService.put(req.user.userId, { photo: file.filename });
     return { photo: file.filename };
   }
