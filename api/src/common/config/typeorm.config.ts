@@ -26,7 +26,7 @@ export const typeOrmConfig: TypeOrmModuleOptions = {
   entities: [__dirname + '/../../**/*.entity{.ts,.js}'],
 
   // Synchronisation automatique du schéma (à désactiver en production !)
-  synchronize: true,
+  synchronize: false,
 
   // Affichage des logs d'erreur et d'avertissement
   logging: ['error', 'warn'],

@@ -62,8 +62,13 @@ export class DocumentController {
       const userId = req.user.userId;
       this.logger.log(`Recherche de la dernière facture pour l'utilisateur ${userId}`);
 
+      // Correction : on rend la requête compatible avec les anciennes données où 'uploader' peut être soit une relation (User), soit juste un id (string)
+      // Cela permet d'éviter les 404 si la facture existe mais que le champ uploader n'est pas une vraie relation ManyToOne
       const lastInvoice = await this.documentRepository.findOne({
-        where: { uploader: { id: userId }, type: DocumentType.INVOICE },
+        where: [
+          { uploader: { id: userId }, type: DocumentType.INVOICE }, // cas normal (relation)
+          { uploader: userId, type: DocumentType.INVOICE }           // cas legacy (id simple)
+        ],
         order: { id: 'DESC' }
       });
 
