@@ -53,11 +53,24 @@ const bootstrap = async () => {
     // Désactiver temporairement helmet pour le développement
     // app.use(helmet());
 
-    // Limite le nombre de requêtes par IP
-    app.use(rateLimit({
-      windowMs: 15 * 60 * 1000, // 15 minute window
-      max: process.env.NODE_ENV === 'production' ? 100 : 1000 // 1000 en dev, 100 en prod
-    }));
+    // Limite le nombre de requêtes par IP avec des configurations différentes selon les routes
+    const authLimiter = rateLimit({
+      windowMs: 15 * 60 * 1000, // 15 minutes
+      max: process.env.NODE_ENV === 'production' ? 200 : 2000, // Plus de requêtes autorisées pour l'auth
+      message: 'Trop de tentatives de connexion, veuillez réessayer plus tard.'
+    });
+
+    const apiLimiter = rateLimit({
+      windowMs: 15 * 60 * 1000, // 15 minutes
+      max: process.env.NODE_ENV === 'production' ? 500 : 5000, // Limite générale plus élevée
+      message: 'Trop de requêtes, veuillez réessayer plus tard.'
+    });
+
+    // Appliquer des limites spécifiques pour l'authentification
+    app.use('/api/security', authLimiter);
+    
+    // Appliquer la limite générale pour toutes les autres routes
+    app.use('/api', apiLimiter);
 
     // Configuration pour Stripe webhooks - AVANT les autres middlewares
     app.use(
