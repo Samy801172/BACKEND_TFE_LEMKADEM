@@ -134,9 +134,10 @@ export class UserController {
   @UseGuards(JwtAuthGuard)
   @Post('profile/photo')
   // Limite la taille de la photo de profil à 2 Mo maximum (empêche l'erreur 413 si l'image est trop grosse)
+  // IMPORTANT : le champ du fichier dans le FormData doit être 'photo' et le dossier d'upload est 'members' (sans accent)
   @UseInterceptors(FileInterceptor('photo', {
     storage: diskStorage({
-      destination: './public/members',
+      destination: './public/members', // <-- Uniformisé : dossier sans accent
       filename: (req, file, cb) => {
         const ext = path.extname(file.originalname);
         cb(null, req.user.userId + '-' + Date.now() + ext);
@@ -145,7 +146,6 @@ export class UserController {
     limits: { fileSize: 2 * 1024 * 1024 } // 2 Mo
   }))
   async uploadPhoto(@UploadedFile() file: any, @Req() req) {
-    console.log('Fichier reçu:', file);
     if (!file) {
       throw new BadRequestException('Aucun fichier reçu');
     }
