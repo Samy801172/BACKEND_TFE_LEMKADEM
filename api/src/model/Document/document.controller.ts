@@ -66,10 +66,7 @@ export class DocumentController {
       const lastInvoice = await this.documentRepository
         .createQueryBuilder('document')
         .where('document.type = :type', { type: DocumentType.INVOICE })
-        .andWhere(new Brackets(qb => {
-          qb.where('document.uploader = :userId', { userId })
-            .orWhere('document.uploader_id = :userId', { userId });
-        }))
+        .andWhere('document.uploaderId = :userId', { userId })
         .orderBy('document.createdAt', 'DESC')
         .getOne();
 
@@ -117,10 +114,7 @@ export class DocumentController {
       const lastInvoice = await this.documentRepository
         .createQueryBuilder('document')
         .where('document.type = :type', { type: DocumentType.INVOICE })
-        .andWhere(new Brackets(qb => {
-          qb.where('document.uploader = :userId', { userId })
-            .orWhere('document.uploader_id = :userId', { userId });
-        }))
+        .andWhere('document.uploaderId = :userId', { userId })
         .orderBy('document.createdAt', 'DESC')
         .getOne();
 
