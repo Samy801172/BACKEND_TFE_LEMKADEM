@@ -8,6 +8,7 @@ import * as path from 'path';
 import { JwtAuthGuard } from '@feature/security/guards/jwt-auth.guard';
 import { MailService } from '../../common/services/mail.service';
 import { Logger } from '@nestjs/common';
+import { Brackets } from 'typeorm';
 
 @Controller('documents')
 export class DocumentController {
@@ -62,18 +63,18 @@ export class DocumentController {
       const userId = req.user.userId;
       this.logger.log(`Recherche de la dernière facture pour l'utilisateur ${userId}`);
 
-      // Correction : on rend la requête compatible avec les anciennes données où 'uploader' peut être soit une relation (User), soit juste un id (string)
-      // Cela permet d'éviter les 404 si la facture existe mais que le champ uploader n'est pas une vraie relation ManyToOne
-      const lastInvoice = await this.documentRepository.findOne({
-        where: [
-          { uploader: { id: userId }, type: DocumentType.INVOICE }, // cas normal (relation)
-          { uploader: userId, type: DocumentType.INVOICE }           // cas legacy (id simple)
-        ],
-        order: { id: 'DESC' }
-      });
+      const lastInvoice = await this.documentRepository
+        .createQueryBuilder('document')
+        .where('document.type = :type', { type: DocumentType.INVOICE })
+        .andWhere(new Brackets(qb => {
+          qb.where('document.uploader = :userId', { userId })
+            .orWhere('document.uploader_id = :userId', { userId });
+        }))
+        .orderBy('document.createdAt', 'DESC')
+        .getOne();
 
       if (!lastInvoice) {
-        this.logger.error(`Aucune facture trouvée pour l'utilisateur ${userId}`);
+        this.logger.warn(`Aucune facture trouvée pour l'utilisateur ${userId}`);
         throw new NotFoundException('Aucune facture trouvée');
       }
 
@@ -86,7 +87,7 @@ export class DocumentController {
       }
 
       res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', `attachment; filename="${path.basename(filePath)}"`);
+      res.setHeader('Content-Disposition', `attachment; filename="facture.pdf"`);
       
       const fileStream = fs.createReadStream(filePath);
       fileStream.on('error', (error) => {
@@ -95,51 +96,61 @@ export class DocumentController {
       });
 
       fileStream.pipe(res);
-      this.logger.log(`Dernière facture téléchargée avec succès pour l'utilisateur ${userId}`);
+      this.logger.log(`Facture envoyée avec succès pour l'utilisateur ${userId}`);
     } catch (error) {
-      this.logger.error(`Erreur lors du téléchargement de la dernière facture: ${error.message}`);
-      throw error;
+      this.logger.error(`Erreur lors de la récupération de la facture: ${error.message}`);
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new InternalServerErrorException('Erreur lors de la récupération de la facture');
     }
   }
 
-  /**
-   * Endpoint pour réclamer une facture :
-   * - Vérifie l'utilisateur connecté (JWT)
-   * - Cherche la dernière facture (DocumentType.INVOICE)
-   * - Envoie la facture par email via Mailtrap
-   * - Retourne un message de succès
-   */
   @Post('request-invoice')
   @UseGuards(JwtAuthGuard)
   async requestInvoice(@Req() req) {
     try {
-      const user = req.user;
-      this.logger.log(`Demande de facture par l'utilisateur ${user.userId}`);
+      const userId = req.user.userId;
+      const userEmail = req.user.email;
+      this.logger.log(`Demande de facture par l'utilisateur ${userId}`);
 
-      const lastInvoice = await this.documentRepository.findOne({
-        where: { uploader: { id: user.userId }, type: DocumentType.INVOICE },
-        order: { id: 'DESC' }
-      });
+      const lastInvoice = await this.documentRepository
+        .createQueryBuilder('document')
+        .where('document.type = :type', { type: DocumentType.INVOICE })
+        .andWhere(new Brackets(qb => {
+          qb.where('document.uploader = :userId', { userId })
+            .orWhere('document.uploader_id = :userId', { userId });
+        }))
+        .orderBy('document.createdAt', 'DESC')
+        .getOne();
 
-      // Vérification robuste : document ET fichier doivent exister
-      if (!lastInvoice || !lastInvoice.file_url || !fs.existsSync(path.resolve(lastInvoice.file_url))) {
-        this.logger.error(`Aucune facture exploitable trouvée pour l'utilisateur ${user.userId}`);
+      if (!lastInvoice || !lastInvoice.file_url) {
+        this.logger.error(`Aucune facture trouvée pour l'utilisateur ${userId}`);
         throw new NotFoundException('Aucune facture trouvée');
       }
 
+      const filePath = path.resolve(lastInvoice.file_url);
+      if (!fs.existsSync(filePath)) {
+        this.logger.error(`Fichier introuvable: ${filePath}`);
+        throw new NotFoundException('Fichier de la facture introuvable');
+      }
+
       await this.mailService.sendMail(
-        user.email,
+        userEmail,
         'Votre facture',
         'Veuillez trouver votre facture en pièce jointe.',
         undefined,
-        [{ filename: 'facture.pdf', path: lastInvoice.file_url }]
+        [{ filename: 'facture.pdf', path: filePath }]
       );
 
-      this.logger.log(`Facture envoyée par email à ${user.email}`);
-      return { message: 'Facture envoyée par email.' };
+      this.logger.log(`Facture envoyée par email à ${userEmail}`);
+      return { message: 'Facture envoyée par email avec succès.' };
     } catch (error) {
       this.logger.error(`Erreur lors de l'envoi de la facture: ${error.message}`);
-      throw error;
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new InternalServerErrorException('Erreur lors de l\'envoi de la facture');
     }
   }
 } 
