@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Put, Param, Delete, UseGuards, NotFoundException, Patch, Req, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { Controller, Get, Post, Body, Put, Param, Delete, UseGuards, NotFoundException, Patch, Req, UseInterceptors, UploadedFile, BadRequestException } from '@nestjs/common';
 import { UserService } from './user.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -145,6 +145,10 @@ export class UserController {
     limits: { fileSize: 2 * 1024 * 1024 } // 2 Mo
   }))
   async uploadPhoto(@UploadedFile() file: any, @Req() req) {
+    console.log('Fichier reçu:', file);
+    if (!file) {
+      throw new BadRequestException('Aucun fichier reçu');
+    }
     await this.userService.put(req.user.userId, { photo: file.filename });
     return { photo: file.filename };
   }
