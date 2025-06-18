@@ -309,4 +309,61 @@ export class EventService {
 
     return { success: true, message: 'Événement annulé, notifications et remboursements Stripe effectués' };
   }
+
+  /**
+   * Confirme la présence d'un membre à un événement
+   * Vérifie que le membre a payé avant de confirmer
+   */
+  async confirmPresence(eventId: string, userId: string): Promise<{ success: boolean; message: string }> {
+    // 1. Vérifier que l'événement existe
+    const event = await this.eventRepository.findOne({
+      where: { id: eventId },
+      relations: ['participations', 'participations.participant']
+    });
+
+    if (!event) {
+      throw new NotFoundException('Événement non trouvé');
+    }
+
+    // 2. Vérifier que l'utilisateur est inscrit à cet événement
+    const participation = event.participations.find(p => p.participantId === userId);
+    if (!participation) {
+      throw new ForbiddenException('Vous n\'êtes pas inscrit à cet événement');
+    }
+
+    // 3. Vérifier que l'utilisateur a payé (si l'événement est payant)
+    if (event.price > 0 && participation.payment_status !== PaymentStatus.PAID) {
+      throw new ForbiddenException('Vous devez avoir payé pour confirmer votre présence');
+    }
+
+    // 4. Vérifier que la présence n'est pas déjà confirmée
+    if (participation.status === ParticipationStatus.CONFIRMED) {
+      throw new ConflictException('Votre présence est déjà confirmée');
+    }
+
+    // 5. Confirmer la présence en changeant le statut
+    participation.status = ParticipationStatus.CONFIRMED;
+    await this.participationRepository.save(participation);
+
+    // 6. Envoyer un email de notification à l'administrateur
+    try {
+      const user = await this.userService.findOne(userId);
+      if (user?.email) {
+        await this.mailService.sendMail(
+          'admin@lemkadem.com', // Email de l'administrateur
+          `Confirmation de présence - ${event.title}`,
+          `Le membre ${user.firstName} ${user.lastName} a confirmé sa présence à l'événement "${event.title}"`,
+          `<p>Le membre <strong>${user.firstName} ${user.lastName}</strong> a confirmé sa présence à l'événement <strong>${event.title}</strong>.</p>`
+        );
+      }
+    } catch (error) {
+      // Log l'erreur mais ne pas faire échouer la confirmation
+      console.error('Erreur lors de l\'envoi de l\'email de notification:', error);
+    }
+
+    return {
+      success: true,
+      message: 'Présence confirmée avec succès'
+    };
+  }
 } 
