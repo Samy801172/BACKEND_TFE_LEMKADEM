@@ -16,8 +16,8 @@ export class MailService {
         host: 'sandbox.smtp.mailtrap.io', // Remplace par ton host Mailtrap
         port: 2525, // Port Mailtrap
         auth: {
-          user: '1670edf90378a8', // Username Mailtrap
-          pass: '22f9fefd59374f'  // Password Mailtrap
+          user: '68a9766c0f7b1b', // Username Mailtrap
+          pass: '3ff1eb9585a3e2'  // Password Mailtrap
         }
       });
       this.logger.log('✅ Transporter Mailtrap initialisé avec succès');
