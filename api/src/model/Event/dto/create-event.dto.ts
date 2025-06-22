@@ -25,8 +25,9 @@ export class CreateEventDto {
   @IsNotEmpty()
   @Transform(({ value }) => new Date(value))
   @IsDate()
-  // @Validate(IsFutureDateConstraint) // Désactivé temporairement pour la présentation : permet de créer un événement à n'importe quelle date (future ou passée)
-  // @Validate(IsBusinessHoursConstraint) // Désactivé temporairement pour la présentation : permet de créer un événement à n'importe quelle heure
+
+  @Validate(IsFutureDateConstraint) // Désactivé temporairement pour la présentation : permet de créer un événement à n'importe quelle date (future ou passée)
+  @Validate(IsBusinessHoursConstraint) // Désactivé temporairement pour la présentation : permet de créer un événement à n'importe quelle heure
   date: Date;
 
   @ApiProperty()
