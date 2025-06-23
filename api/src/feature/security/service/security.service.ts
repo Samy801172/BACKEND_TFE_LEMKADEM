@@ -555,6 +555,8 @@ export class SecurityService {
    * - Génère un token unique
    * - Stocke le token et sa date d'expiration
    * - Envoie un email avec le lien de réinitialisation
+   *
+   * Le lien de réinitialisation utilise l'URL du frontend (FRONTEND_URL) pour être correct en dev et en prod.
    */
   async requestPasswordReset(email: string): Promise<void> {
     const credential = await this.repository.findOne({ where: { mail: email } });
@@ -566,8 +568,9 @@ export class SecurityService {
     credential.resetTokenExpires = new Date(Date.now() + 3600 * 1000); // 1h
     await this.repository.save(credential);
 
-    // Générer le lien de réinitialisation (corrigé pour Angular : /auth/reset-password/)
-    const resetLink = `http://localhost:4200/auth/reset-password/${token}`;
+    // Utilise la variable d'environnement FRONTEND_URL pour générer le lien correct (dev/prod)
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:4200';
+    const resetLink = `${frontendUrl}/auth/reset-password/${token}`;
     // Log explicite pour vérifier le lien généré (doit apparaître dans la console du backend)
     console.log('Lien de reset envoyé :', resetLink);
     await this.mailService.sendMail(
@@ -606,5 +609,20 @@ réinitialisation envoyé à jurytest2@hotmail.be
     credential.resetTokenExpires = null;
     await this.repository.save(credential);
     this.logger.log(`Mot de passe réinitialisé pour ${credential.mail}`);
+  }
+
+  /**
+   * Retourne l'URL de la photo de profil ou de la carte de visite
+   * - Si photo commence par http, on retourne l'URL telle quelle (cas d'une URL externe)
+   * - Sinon, on construit l'URL selon l'environnement (dev ou prod)
+   * - Ajoute un timestamp pour forcer le rafraîchissement de l'image après modification
+   * - Si aucune photo, retourne l'image par défaut (assets/members/default.jpg)
+   */
+  getProfileImageUrl(photo: string): string {
+    if (photo.startsWith('http')) {
+      return photo;
+    }
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:4200';
+    return `${frontendUrl}/assets/members/${photo}?timestamp=${Date.now()}`;
   }
 }
