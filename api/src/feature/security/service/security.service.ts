@@ -28,6 +28,8 @@ import { ApiCodeResponse } from '@common/config';
 import { MailService } from '@common/services/mail.service';
 import { v4 as uuidv4 } from 'uuid';
 
+console.log('=== FICHIER SECURITY.SERVICE.TS CHARGÉ ===');
+
 // Exception personnalisée pour mot de passe erroné
 class InvalidPasswordException extends ApiException {
   constructor() {
@@ -178,7 +180,9 @@ export class SecurityService {
         nom: payload.nom,
         prenom: payload.prenom,
         entreprise: payload.entreprise,
-        type_user: isAdmin ? UserRole.ADMIN : UserRole.MEMBER
+        type_user: isAdmin ? UserRole.ADMIN : UserRole.MEMBER,
+        // Ajout automatique de la photo par défaut si aucune photo n'est fournie
+        photo: 'default.jpg', // <-- photo par défaut
       });
 
       try {
@@ -551,6 +555,8 @@ export class SecurityService {
    * - Génère un token unique
    * - Stocke le token et sa date d'expiration
    * - Envoie un email avec le lien de réinitialisation
+   *
+   * Le lien de réinitialisation utilise l'URL du frontend (FRONTEND_URL) pour être correct en dev et en prod.
    */
   async requestPasswordReset(email: string): Promise<void> {
     const credential = await this.repository.findOne({ where: { mail: email } });
@@ -562,8 +568,11 @@ export class SecurityService {
     credential.resetTokenExpires = new Date(Date.now() + 3600 * 1000); // 1h
     await this.repository.save(credential);
 
-    // Générer le lien de réinitialisation (à adapter selon le front)
-    const resetLink = `http://localhost:4200/reset-password?token=${token}`;
+    // Utilise la variable d'environnement FRONTEND_URL pour générer le lien correct (dev/prod)
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:4200';
+    const resetLink = `${frontendUrl}/auth/reset-password/${token}`;
+    // Log explicite pour vérifier le lien généré (doit apparaître dans la console du backend)
+    console.log('Lien de reset envoyé :', resetLink);
     await this.mailService.sendMail(
       email,
       'Réinitialisation du mot de passe',
@@ -577,7 +586,18 @@ export class SecurityService {
    * Réinitialisation du mot de passe via le token
    * - Vérifie le token et sa validité
    * - Met à jour le mot de passe
-   * - Supprime le token de la base
+   * - Supprime le token de la base[Nest] 12356  - 21/06/2025 22:47:14    WARN [SecurityService] 🚫 Mot de passe erroné pour: JURYTEST2
+[Nest] 12356  - 21/06/2025 22:47:14   ERROR [SecurityService] ❌ Échec 
+de connexion: Invalid Password Exception
+[Nest] 12356  - 21/06/2025 22:47:14   ERROR [ApiInterceptor] InvalidPasswordException: Invalid Password Exception
+[Nest] 12356  - 21/06/2025 22:48:35     LOG [MailService] Tentative d'envoi d'email à jurytest2@hotmail.be
+[Nest] 12356  - 21/06/2025 22:48:36     LOG [MailService] ✅ Email envo
+yé avec succès à jurytest2@hotmail.be (MessageId: <7e17ec04-b2b3-a590-f56f-989528cae5bc@monapp.com>)
+[Nest] 12356  - 21/06/2025 22:48:36     LOG [MailService] 🔗 Aperçu Ethereal: https://ethereal.email/message/aFcZzhUEKDDG0sY2aFcapNmj0lJfmPkPAAAAApMIlph8lQVp.KVdshC1OxA
+[Nest] 12356  - 21/06/2025 22:48:36     LOG [SecurityService] Lien de 
+réinitialisation envoyé à jurytest2@hotmail.be
+[Nest] 12356  - 21/06/2025 22:48:36     LOG [ApiInterceptor] path /api/security/forgot-password
+
    */
   async resetPassword(token: string, newPassword: string): Promise<void> {
     const credential = await this.repository.findOne({ where: { resetToken: token } });
@@ -589,5 +609,20 @@ export class SecurityService {
     credential.resetTokenExpires = null;
     await this.repository.save(credential);
     this.logger.log(`Mot de passe réinitialisé pour ${credential.mail}`);
+  }
+
+  /**
+   * Retourne l'URL de la photo de profil ou de la carte de visite
+   * - Si photo commence par http, on retourne l'URL telle quelle (cas d'une URL externe)
+   * - Sinon, on construit l'URL selon l'environnement (dev ou prod)
+   * - Ajoute un timestamp pour forcer le rafraîchissement de l'image après modification
+   * - Si aucune photo, retourne l'image par défaut (assets/members/default.jpg)
+   */
+  getProfileImageUrl(photo: string): string {
+    if (photo.startsWith('http')) {
+      return photo;
+    }
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:4200';
+    return `${frontendUrl}/assets/members/${photo}?timestamp=${Date.now()}`;
   }
 }

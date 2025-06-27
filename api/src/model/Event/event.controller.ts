@@ -94,6 +94,25 @@ export class EventController {
     };
   }
 
+  /**
+   * Endpoint pour confirmer la présence à un événement (membre)
+   * Accessible uniquement si l'utilisateur a payé
+   */
+  @Post(':id/confirm-presence')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.MEMBER)
+  @ApiResponse({ status: 200, description: 'Présence confirmée avec succès' })
+  @ApiResponse({ status: 403, description: 'Non autorisé - Paiement requis' })
+  async confirmPresence(@Request() req, @Param('id') eventId: string) {
+    this.logger.debug(`Confirmation de présence - User: ${req.user.userId}, Event: ${eventId}`);
+    const result = await this.eventService.confirmPresence(eventId, req.user.userId);
+    return {
+      code: 'EVENT_PRESENCE_CONFIRMED',
+      message: 'Présence confirmée avec succès',
+      data: result
+    };
+  }
+
   @Patch(':id/cancel')
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.ORGANIZER)
