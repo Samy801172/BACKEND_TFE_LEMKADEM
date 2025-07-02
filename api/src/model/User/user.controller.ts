@@ -10,8 +10,8 @@ import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { User } from './entities/user.entity';
 import { JwtGuard } from '@feature/security/guards/jwt.guard';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { diskStorage } from 'multer';
-import * as path from 'path';
+import { CloudinaryStorage } from 'multer-storage-cloudinary';
+import cloudinary from 'src/common/config/cloudinary.config';
 
 // IMPORTANT :
 // Ce contrôleur n'a PAS de décorateur @Roles ou @UseGuards(RolesGuard) sur la classe.
@@ -133,23 +133,21 @@ export class UserController {
 
   @UseGuards(JwtAuthGuard)
   @Post('profile/photo')
-  // Limite la taille de la photo de profil à 2 Mo maximum (empêche l'erreur 413 si l'image est trop grosse)
-  // IMPORTANT : le champ du fichier dans le FormData doit être 'photo' et le dossier d'upload est 'members' (sans accent)
   @UseInterceptors(FileInterceptor('photo', {
-    storage: diskStorage({
-      destination: './public/members', // <-- Uniformisé : dossier sans accent
-      filename: (req, file, cb) => {
-        const ext = path.extname(file.originalname);
-        cb(null, req.user.userId + '-' + Date.now() + ext);
+    storage: new CloudinaryStorage({
+      cloudinary,
+      params: {
+        folder: 'members',
+        allowed_formats: ['jpg', 'png', 'jpeg'],
+        transformation: [{ width: 400, height: 400, crop: 'limit' }]
       }
     }),
-    limits: { fileSize: 2 * 1024 * 1024 } // 2 Mo
+    limits: { fileSize: 2 * 1024 * 1024 }
   }))
   async uploadPhoto(@UploadedFile() file: any, @Req() req) {
-    if (!file) {
-      throw new BadRequestException('Aucun fichier reçu');
-    }
-    await this.userService.put(req.user.userId, { photo: file.filename });
-    return { photo: file.filename };
+    if (!file) throw new BadRequestException('Aucun fichier reçu');
+    // file.path contient l'URL Cloudinary
+    await this.userService.put(req.user.userId, { photo: file.path });
+    return { photo: file.path };
   }
 }
