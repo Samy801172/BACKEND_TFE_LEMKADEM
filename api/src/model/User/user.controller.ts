@@ -131,23 +131,44 @@ export class UserController {
     return this.userService.addContact(req.user.userId, contactId, message);
   }
 
+  /**
+   * Upload de photo de profil vers Cloudinary
+   * Remplace l'ancien système de stockage local par un stockage cloud dynamique
+   * Avantages : 
+   * - Persistance des images (pas de perte lors des redéploiements Render)
+   * - URLs stables et accessibles partout
+   * - Transformation automatique des images (redimensionnement)
+   */
   @UseGuards(JwtAuthGuard)
   @Post('profile/photo')
   @UseInterceptors(FileInterceptor('photo', {
     storage: new CloudinaryStorage({
       cloudinary,
       params: {
-        folder: 'members',
-        allowed_formats: ['jpg', 'png', 'jpeg'],
-        transformation: [{ width: 400, height: 400, crop: 'limit' }]
+        // @ts-ignore - Les types TypeScript ne reconnaissent pas tous les paramètres Cloudinary
+        folder: 'members', // Dossier dans Cloudinary où seront stockées les photos
+        allowed_formats: ['jpg', 'png', 'jpeg'], // Formats d'image acceptés
+        transformation: [{ width: 400, height: 400, crop: 'limit' }] // Redimensionne automatiquement à 400x400px max
       }
     }),
-    limits: { fileSize: 2 * 1024 * 1024 }
+    limits: { fileSize: 2 * 1024 * 1024 } // Limite de taille : 2 Mo maximum
   }))
   async uploadPhoto(@UploadedFile() file: any, @Req() req) {
-    if (!file) throw new BadRequestException('Aucun fichier reçu');
-    // file.path contient l'URL Cloudinary
+    // Vérification de la réception du fichier
+    if (!file) {
+      throw new BadRequestException('Aucun fichier reçu');
+    }
+
+    // Log pour debug (à retirer en production)
+    console.log('==== DEBUG UPLOAD PHOTO CLOUDINARY ====');
+    console.log('Fichier reçu:', file);
+    console.log('URL Cloudinary:', file.path);
+
+    // file.path contient l'URL Cloudinary de la photo uploadée
+    // Exemple : https://res.cloudinary.com/dkvsl0nrh/image/upload/v1234567890/members/user-id-timestamp.jpg
     await this.userService.put(req.user.userId, { photo: file.path });
+    
+    // Retourne l'URL Cloudinary pour que le front puisse l'afficher immédiatement
     return { photo: file.path };
   }
 }

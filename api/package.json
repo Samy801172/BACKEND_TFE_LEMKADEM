@@ -18,10 +18,11 @@
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
-    "postbuild": "cp -r public dist/public"
+    "postbuild": "node -e \"require('fs').cpSync('public', 'dist/public', {recursive: true, force: true})\""
   },
   "dependencies": {
     "@angular/animations": "^19.2.11",
+    "@nestjs/cli": "^10.0.0",
     "@nestjs/common": "^10.3.9",
     "@nestjs/config": "^4.0.0",
     "@nestjs/core": "^10.3.9",
@@ -34,8 +35,10 @@
     "builder-pattern": "^2.2.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.2",
+    "cloudinary": "^1.41.3",
     "express-rate-limit": "^7.5.0",
     "helmet": "^8.0.0",
+    "multer-storage-cloudinary": "^4.0.0",
     "mysql2": "^3.10.1",
     "ngx-toastr": "^19.0.0",
     "nodemailer": "^7.0.3",
@@ -48,8 +51,7 @@
     "stripe": "^17.7.0",
     "swagger-ui-express": "^5.0.1",
     "typeorm": "^0.3.20",
-    "ulid": "^2.3.0",
-    "@nestjs/cli": "^10.0.0"
+    "ulid": "^2.3.0"
   },
   "devDependencies": {
     "@nestjs/schematics": "^10.0.0",
@@ -64,6 +66,7 @@
     "@types/swagger-ui-express": "^4.1.6",
     "@typescript-eslint/eslint-plugin": "^6.0.0",
     "@typescript-eslint/parser": "^6.0.0",
+    "copyfiles": "^2.4.1",
     "eslint": "^8.42.0",
     "eslint-config-prettier": "^9.0.0",
     "eslint-plugin-prettier": "^5.0.0",
