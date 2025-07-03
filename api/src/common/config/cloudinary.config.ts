@@ -1,4 +1,6 @@
 import { v2 as cloudinary } from 'cloudinary';
+// Configuration Cloudinary pour l'upload dynamique des images de profil
+
 
 cloudinary.config({
   cloud_name: 'Tdkvsl0nrh', // Remplace par ton cloud_name Cloudinary

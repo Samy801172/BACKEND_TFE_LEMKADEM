@@ -22,7 +22,9 @@ import cloudinary from 'src/common/config/cloudinary.config';
 @ApiBearerAuth()
 @Controller('users')
 export class UserController {
-  constructor(private readonly userService: UserService) {}
+  constructor(private readonly userService: UserService) {
+    console.log('UserController instancié');
+  }
 
   @Post()
   async create(@Body() createUserDto: CreateUserDto) {
@@ -145,30 +147,33 @@ export class UserController {
     storage: new CloudinaryStorage({
       cloudinary,
       params: {
-        // @ts-ignore - Les types TypeScript ne reconnaissent pas tous les paramètres Cloudinary
-        folder: 'members', // Dossier dans Cloudinary où seront stockées les photos
-        allowed_formats: ['jpg', 'png', 'jpeg'], // Formats d'image acceptés
-        transformation: [{ width: 400, height: 400, crop: 'limit' }] // Redimensionne automatiquement à 400x400px max
+        // @ts-ignore
+        folder: 'members',
+        allowed_formats: ['jpg', 'png', 'jpeg'],
+        transformation: [{ width: 400, height: 400, crop: 'limit' }]
       }
     }),
-    limits: { fileSize: 2 * 1024 * 1024 } // Limite de taille : 2 Mo maximum
+    limits: { fileSize: 2 * 1024 * 1024 }
   }))
   async uploadPhoto(@UploadedFile() file: any, @Req() req) {
-    // Vérification de la réception du fichier
+    console.log('==== DEBUG UPLOAD PHOTO CLOUDINARY ====');
     if (!file) {
+      console.error('Aucun fichier reçu dans la requête !');
       throw new BadRequestException('Aucun fichier reçu');
     }
-
-    // Log pour debug (à retirer en production)
-    console.log('==== DEBUG UPLOAD PHOTO CLOUDINARY ====');
-    console.log('Fichier reçu:', file);
-    console.log('URL Cloudinary:', file.path);
-
-    // file.path contient l'URL Cloudinary de la photo uploadée
-    // Exemple : https://res.cloudinary.com/dkvsl0nrh/image/upload/v1234567890/members/user-id-timestamp.jpg
-    await this.userService.put(req.user.userId, { photo: file.path });
-    
-    // Retourne l'URL Cloudinary pour que le front puisse l'afficher immédiatement
-    return { photo: file.path };
+    console.log('Fichier reçu :', file);
+    if (file.path) {
+      console.log('URL Cloudinary générée :', file.path);
+    } else {
+      console.error('Pas d\'URL Cloudinary générée !');
+    }
+    try {
+      await this.userService.put(req.user.userId, { photo: file.path });
+      console.log('Photo enregistrée pour userId', req.user.userId);
+      return { photo: file.path };
+    } catch (err) {
+      console.error('Erreur lors de la sauvegarde de la photo :', err);
+      throw err;
+    }
   }
 }
