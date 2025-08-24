@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Post, Patch, UseGuards, Req, Res } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Post, Patch, UseGuards, Req, Res, BadRequestException } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags, ApiOperation, ApiResponse } from "@nestjs/swagger";
 import { SecurityService } from "./service";
 import { Credential } from './data/entity/credential.entity';
@@ -212,6 +212,7 @@ export class SecurityController {
   @Public()
   async googleAuth() {
     // Passport gère la redirection
+    console.log('🔧 [GOOGLE AUTH] Démarrage de l\'authentification Google');
   }
 
   /**
@@ -223,13 +224,26 @@ export class SecurityController {
   @Public()
   async googleAuthRedirect(@Req() req, @Res() res) {
     try {
+      console.log('🔧 [GOOGLE REDIRECT] Callback Google reçu');
+      console.log('🔧 [GOOGLE REDIRECT] Utilisateur reçu:', req.user);
+      
+      if (!req.user) {
+        console.error('❌ [GOOGLE REDIRECT] Aucun utilisateur reçu de Google');
+        return res.redirect('http://localhost:4200/login?error=no_user');
+      }
+      
       // Générer le token JWT
       const token = await this.service.generateToken(req.user);
+      console.log('✅ [GOOGLE REDIRECT] Token généré avec succès');
       
       // Rediriger vers le frontend avec le token
       // Note: Le token est stocké dans la propriété 'token' de l'entité Token
-      res.redirect(`http://localhost:4200/auth/google/callback?token=${token.token}`);
+      const redirectUrl = `http://localhost:4200/auth/google/callback?token=${token.token}`;
+      console.log('🔧 [GOOGLE REDIRECT] Redirection vers:', redirectUrl);
+      
+      res.redirect(redirectUrl);
     } catch (error) {
+      console.error('❌ [GOOGLE REDIRECT] Erreur lors du callback:', error);
       // En cas d'erreur, rediriger vers la page de login avec un message d'erreur
       res.redirect('http://localhost:4200/login?error=auth_failed');
     }
@@ -252,8 +266,12 @@ export class SecurityController {
    */
   @Public()
   @Post('reset-password')
-  async resetPassword(@Body() body: { token: string, newPassword: string }) {
-    await this.service.resetPassword(body.token, body.newPassword);
+  async resetPassword(@Body() body: { token: string, password: string }) {
+    console.log('Corps reçu pour reset password :', body);
+    if (!body.token || !body.password) {
+      throw new BadRequestException('Token et mot de passe requis');
+    }
+    await this.service.resetPassword(body.token, body.password);
     return { message: 'Mot de passe réinitialisé' };
   }
 }

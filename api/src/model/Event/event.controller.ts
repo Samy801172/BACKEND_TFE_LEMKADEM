@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Request, Logger } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Request, Logger, NotFoundException, ForbiddenException, UseInterceptors, UploadedFile, Req } from '@nestjs/common';
 import { EventService } from './services/event.service';
 import { CreateEventDto } from './dto/create-event.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
@@ -8,6 +8,9 @@ import { JwtAuthGuard } from '@feature/security/guards/jwt-auth.guard';
 import { RolesGuard } from '@feature/security/guards/roles.guard';
 import { Roles } from '@feature/security/decorators/roles.decorator';
 import { UserRole } from '../User/entities/user-role.enum';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import * as path from 'path';
 
 @ApiTags('events')
 @Controller('events')
@@ -29,7 +32,8 @@ export class EventController {
   @Roles(UserRole.ADMIN, UserRole.ORGANIZER)
   @ApiResponse({ status: 201, description: 'Événement créé avec succès' })
   async create(@Request() req, @Body() createEventDto: CreateEventDto) {
-    console.log('User data:', req.user);
+    // DEBUG: Affichage des données utilisateur lors de la création d'un événement (à activer uniquement en développement)
+    // console.log('User data:', req.user);
     return this.eventService.create(createEventDto, req.user.userId);
   }
 
@@ -47,6 +51,14 @@ export class EventController {
   async getRegisteredEvents(@Request() req) {
     const userId = req.user.userId;
     this.logger.debug(`Getting registered events for user: ${userId}`);
+    return await this.eventService.getRegisteredEvents(userId);
+  }
+
+  @Get('my-events')
+  @ApiResponse({ status: 200, description: 'Retourne les événements auxquels l\'utilisateur est inscrit' })
+  async getMyEvents(@Request() req) {
+    const userId = req.user.userId;
+    this.logger.debug(`Getting my events for user: ${userId}`);
     return await this.eventService.getRegisteredEvents(userId);
   }
 
@@ -93,7 +105,23 @@ export class EventController {
     };
   }
 
-  @Patch(':id/cancel')
+  @Delete(':id/unregister')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.MEMBER)
+  @ApiResponse({ status: 200, description: 'Participation annulée avec succès' })
+  @ApiResponse({ status: 404, description: 'Participation non trouvée' })
+  async unregister(@Request() req, @Param('id') eventId: string) {
+    this.logger.debug(`Annulation de participation - User: ${req.user.userId}, Event: ${eventId}`);
+    
+    const result = await this.eventService.unregister(eventId, req.user.userId);
+    return {
+      code: 'EVENT_UNREGISTER_SUCCESS',
+      message: 'Participation annulée avec succès',
+      data: result
+    };
+  }
+
+  @Post(':id/cancel')
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.ORGANIZER)
   @ApiResponse({ status: 200, description: "Événement annulé (soft delete) avec succès" })
@@ -103,5 +131,114 @@ export class EventController {
    */
   async cancelEvent(@Param('id') id: string) {
     return this.eventService.cancelEvent(id);
+  }
+
+  /**
+   * Endpoint pour confirmer la présence à un événement (membre)
+   * Accessible uniquement si l'utilisateur a payé
+   * Retourne toujours success: true si la confirmation est enregistrée, même si l'email échoue
+   */
+  @Post(':id/confirm-presence')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.MEMBER)
+  @ApiResponse({ status: 200, description: 'Présence confirmée avec succès' })
+  @ApiResponse({ status: 403, description: 'Non autorisé - Paiement requis' })
+  async confirmPresence(@Request() req, @Param('id') eventId: string) {
+    this.logger.debug(`Confirmation de présence - User: ${req.user.userId}, Event: ${eventId}`);
+    await this.eventService.confirmPresence(eventId, req.user.userId);
+    // Toujours retourner success: true même si l'email échoue
+    return {
+      success: true,
+      message: 'Présence confirmée avec succès'
+    };
+  }
+
+  /**
+   * Génère les liens de calendrier pour un événement (Google Calendar, Outlook, etc.)
+   * Accessible uniquement si l'utilisateur a payé pour l'événement
+   */
+  @Get(':id/calendar-links')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.MEMBER)
+  @ApiResponse({ status: 200, description: 'Liens de calendrier générés' })
+  @ApiResponse({ status: 403, description: 'Non autorisé - Paiement requis' })
+  async getCalendarLinks(@Request() req, @Param('id') eventId: string) {
+    try {
+      this.logger.debug(`Génération des liens de calendrier - User: ${req.user.userId}, Event: ${eventId}`);
+      
+      const event = await this.eventService.findOne(eventId);
+      if (!event) {
+        throw new NotFoundException('Événement non trouvé');
+      }
+
+      // Vérifier que l'utilisateur a payé pour cet événement
+      const participation = await this.eventService.getParticipation(eventId, req.user.userId);
+      this.logger.debug(`Participation trouvée:`, participation);
+      this.logger.debug(`Payment status: ${participation?.payment_status}, Type: ${typeof participation?.payment_status}`);
+      
+      if (!participation || participation.payment_status !== 'PAID') {
+        this.logger.debug(`Accès refusé - Participation: ${!!participation}, Payment status: ${participation?.payment_status}`);
+        throw new ForbiddenException('Vous devez avoir payé pour cet événement pour accéder aux liens de calendrier');
+      }
+
+      // Générer les liens de calendrier
+      const startDate = new Date(event.date);
+      const endDate = new Date(startDate.getTime() + 2 * 60 * 60 * 1000); // +2 heures par défaut
+      
+      const formatDate = (date: Date) => {
+        return date.toISOString().replace(/-|:|\.\d+/g, '');
+      };
+
+      const calendarLinks = {
+        google: `https://www.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(event.title)}&details=${encodeURIComponent(event.description)}&location=${encodeURIComponent(event.location)}&dates=${formatDate(startDate)}/${formatDate(endDate)}`,
+        outlook: `https://outlook.live.com/calendar/0/deeplink/compose?subject=${encodeURIComponent(event.title)}&body=${encodeURIComponent(event.description)}&location=${encodeURIComponent(event.location)}&startdt=${startDate.toISOString()}&enddt=${endDate.toISOString()}`,
+        ics: `data:text/calendar;charset=utf8,BEGIN:VCALENDAR%0D%0AVERSION:2.0%0D%0ABEGIN:VEVENT%0D%0ADTSTART:${formatDate(startDate)}%0D%0ADTEND:${formatDate(endDate)}%0D%0ASUMMARY:${encodeURIComponent(event.title)}%0D%0ADESCRIPTION:${encodeURIComponent(event.description)}%0D%0ALOCATION:${encodeURIComponent(event.location)}%0D%0AEND:VEVENT%0D%0AEND:VCALENDAR`
+      };
+
+      const response = {
+        success: true,
+        data: {
+          event: {
+            id: event.id,
+            title: event.title,
+            description: event.description,
+            location: event.location,
+            date: event.date
+          },
+          calendarLinks
+        }
+      };
+      
+      this.logger.debug(`Liens de calendrier générés:`, response);
+      return response;
+    } catch (error) {
+      this.logger.error(`Erreur lors de la génération des liens de calendrier:`, error);
+      throw error;
+    }
+  }
+
+  @Post('upload-image')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.ORGANIZER)
+  @UseInterceptors(FileInterceptor('image', {
+    storage: diskStorage({
+      destination: './uploads/events',
+      filename: (req: any, file, cb) => {
+        const ext = path.extname(file.originalname);
+        const eventId = 'temp-' + Date.now();
+        cb(null, eventId + ext);
+      }
+    })
+  }))
+  async uploadEventImage(@UploadedFile() file: any, @Req() req) {
+    // Génère l'URL dynamique pour l'image d'événement
+    const imageUrl = `/api/files/events/${file.filename}`;
+    return { 
+      code: 'api.common.success',
+      data: { 
+        image_url: imageUrl 
+      },
+      result: true 
+    };
   }
 } 

@@ -3,7 +3,7 @@ import { ApiCodeResponse } from "./enum";
 import { configManager } from '@common/config';
 import { ConfigKey } from "../enum";
 import { isNil } from "lodash";
-import { Observable, map, catchError, of } from "rxjs";
+import { Observable, map, catchError } from "rxjs";
 
 @Injectable()
 export class ApiInterceptor implements NestInterceptor {
@@ -21,20 +21,28 @@ export class ApiInterceptor implements NestInterceptor {
     return next
       .handle()
       .pipe(
-        map(async (response: any) => {
+        map((response: any) => {
+          // Log supprimé pour éviter la pollution de la console
           return { code: this.map(path), data: response, result: true };
         }),
         catchError((error) => {
           this.logger.error(error);
-          const code = error?.response?.code || ApiCodeResponse.COMMON_ERROR;
-          const message = error?.response?.message || error?.message || 'Erreur inconnue';
-          return of({ code, message, data: null, result: false });
+          /**
+           * IMPORTANT :
+           * Ne pas transformer les erreurs en succès HTTP (ex: return of(...)) !
+           * Sinon, le client (Angular, Postman, etc.) reçoit toujours un code 200/201 même en cas d'erreur (404, 500, ...),
+           * ce qui empêche la gestion correcte des erreurs côté frontend.
+           *
+           * Solution professionnelle :
+           * On relance l'erreur pour que le HttpExceptionFilter de NestJS gère le code HTTP approprié.
+           */
+          throw error;
         })
       );
   }
 
   map(path: String): ApiCodeResponse {
-    this.logger.log(`path ${path}`);
+    // Log supprimé pour éviter les logs non professionnels
     const part = path
       .replace(configManager.getValue(ConfigKey.APP_BASE_URL), '')
       .split('/')
@@ -42,7 +50,6 @@ export class ApiInterceptor implements NestInterceptor {
       .slice(0, 2)
       .map(s => s.toUpperCase());
 
-    console.log(`codeResponse: ${part.join('_')}_SUCCESS`);
     const code = ApiCodeResponse[`${part.join('_')}_SUCCESS` as keyof typeof ApiCodeResponse];
     return isNil(code) ? ApiCodeResponse.COMMON_SUCCESS : code;
   }

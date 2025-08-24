@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { Message } from './entities/message.entity';
 import { CreateMessageDto } from './dto/create-message.dto';
 import { User } from '../User/entities/user.entity';
+import { NotificationService } from '../../common/services/notification.service';
 
 @Injectable()
 export class MessageService {
@@ -11,7 +12,8 @@ export class MessageService {
     @InjectRepository(Message)
     private readonly messageRepository: Repository<Message>,
     @InjectRepository(User)
-    private readonly userRepository: Repository<User>
+    private readonly userRepository: Repository<User>,
+    private readonly notificationService: NotificationService
   ) {}
 
   async create(senderId: string, createMessageDto: CreateMessageDto): Promise<Message> {
@@ -34,9 +36,24 @@ export class MessageService {
         is_read: false
       });
       
-      return await this.messageRepository.save(message);
+      const savedMessage = await this.messageRepository.save(message);
+      
+      // Envoyer une notification au destinataire
+      try {
+        await this.notificationService.sendNewMessageNotification(
+          createMessageDto.receiverId,
+          `${sender.prenom} ${sender.nom}`,
+          senderId,
+          createMessageDto.content
+        );
+      } catch (error) {
+        console.error('Erreur lors de l\'envoi de la notification:', error);
+      }
+      
+      return savedMessage;
     } catch (error) {
-      console.error('Erreur lors de la création du message:', error);
+      // DEBUG: Erreur lors de la création du message (à activer uniquement en développement)
+      // console.error('Erreur lors de la création du message:', error);
       throw error;
     }
   }
@@ -93,23 +110,24 @@ export class MessageService {
    * @param messageId ID du message à supprimer
    * @returns Confirmation de suppression
    */
-  async deleteMessage(userId: string, messageId: string): Promise<{ success: boolean; message: string }> {
+  async deleteMessage(userId: string, messageId: string): Promise<{ success: boolean; message: string; deletedAs: 'sender' | 'receiver' }> {
     const message = await this.messageRepository.findOne({
       where: { id: messageId },
-      relations: ['sender']
+      relations: ['sender', 'receiver']
     });
     
     if (!message) {
       throw new NotFoundException('Message not found');
     }
     
-    // Vérifier que l'utilisateur est bien l'expéditeur
-    if (message.sender.id !== userId) {
-      throw new ForbiddenException('You can only delete your own messages');
+    // Permet la suppression si l'utilisateur est l'expéditeur OU le destinataire
+    if (message.sender.id !== userId && message.receiver.id !== userId) {
+      throw new ForbiddenException('You can only delete messages you sent or received');
     }
     
+    const deletedAs = message.sender.id === userId ? 'sender' : 'receiver';
     await this.messageRepository.remove(message);
-    return { success: true, message: 'Message deleted successfully' };
+    return { success: true, message: 'Message deleted successfully', deletedAs };
   }
 
   async findUserMessages(userId: string): Promise<Message[]> {
@@ -169,6 +187,7 @@ export class MessageService {
    * @returns Liste des conversations avec le dernier message et le nombre de non lus
    */
   async getConversations(userId: string) {
+    try {
     // 1. Récupérer tous les messages envoyés ou reçus par l'utilisateur
     const allMessages = await this.messageRepository.find({
       where: [
@@ -192,11 +211,21 @@ export class MessageService {
       // Récupérer les informations du contact
       const contact = await this.userRepository.findOne({ where: { id: contactId } });
       
+      if (!contact) {
+        console.warn(`Contact non trouvé: ${contactId}`);
+        continue; // Passer au contact suivant
+      }
+      
       // Trouver le dernier message échangé avec ce contact
       const lastMessage = allMessages.find(msg => 
         (msg.sender.id === userId && msg.receiver.id === contactId) || 
         (msg.sender.id === contactId && msg.receiver.id === userId)
       );
+      
+      if (!lastMessage) {
+        console.warn(`Aucun message trouvé pour le contact: ${contactId}`);
+        continue; // Passer au contact suivant
+      }
       
       // Compter les messages non lus
       const unreadCount = await this.countUnreadMessages(userId, contactId);
@@ -212,7 +241,7 @@ export class MessageService {
         lastMessage: {
           id: lastMessage.id,
           content: lastMessage.content,
-          date: lastMessage.createdAt,
+          createdAt: lastMessage.createdAt,
           isRead: lastMessage.is_read,
           isOutgoing: lastMessage.sender.id === userId
         },
@@ -222,8 +251,12 @@ export class MessageService {
     
     // 4. Trier par date du dernier message (plus récent en premier)
     return conversations.sort((a, b) => 
-      new Date(b.lastMessage.date).getTime() - new Date(a.lastMessage.date).getTime()
+      new Date(b.lastMessage.createdAt).getTime() - new Date(a.lastMessage.createdAt).getTime()
     );
+    } catch (error) {
+      console.error('Erreur lors de la récupération des conversations:', error);
+      throw error;
+    }
   }
   
   /**
@@ -308,6 +341,32 @@ export class MessageService {
         is_read: false
       },
       relations: ['sender', 'receiver'],
+      order: { createdAt: 'DESC' }
+    });
+  }
+
+  /**
+   * Récupère tous les messages reçus par l'utilisateur
+   * @param userId ID de l'utilisateur connecté
+   * @returns Liste des messages reçus, triés du plus récent au plus ancien
+   */
+  async getReceivedMessages(userId: string): Promise<Message[]> {
+    return this.messageRepository.find({
+      where: { receiver: { id: userId } },
+      relations: ['sender'],
+      order: { createdAt: 'DESC' }
+    });
+  }
+
+  /**
+   * Récupère tous les messages envoyés par l'utilisateur
+   * @param userId ID de l'utilisateur connecté
+   * @returns Liste des messages envoyés, triés du plus récent au plus ancien
+   */
+  async getSentMessages(userId: string): Promise<Message[]> {
+    return this.messageRepository.find({
+      where: { sender: { id: userId } },
+      relations: ['receiver'],
       order: { createdAt: 'DESC' }
     });
   }

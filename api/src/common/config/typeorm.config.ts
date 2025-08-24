@@ -40,7 +40,14 @@ export const typeOrmConfig: TypeOrmModuleOptions = {
   // Options supplémentaires pour la connexion
   extra: {
     connectionTimeoutMillis: 10000, // Timeout de connexion (ms)
-    query_timeout: 10000            // Timeout de requête (ms)
+    query_timeout: 10000,           // Timeout de requête (ms)
+    // Configuration SSL pour Render PostgreSQL
+    ssl: {
+      rejectUnauthorized: false, // Accepte les certificats auto-signés
+      ca: undefined,             // Pas de CA personnalisé
+      key: undefined,            // Pas de clé privée
+      cert: undefined            // Pas de certificat
+    }
   },
 
   // N'exécute pas automatiquement les migrations au démarrage

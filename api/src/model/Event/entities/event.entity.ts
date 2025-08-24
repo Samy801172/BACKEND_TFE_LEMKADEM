@@ -39,8 +39,8 @@ export class Event {
   @Column({ default: false })
   is_cancelled: boolean;
 
-  @Column({ default: false })
-  is_validated: boolean;
+  // NOTE: Le champ is_validated a été supprimé car seuls les admins créent des événements
+  // Il n'y a donc pas besoin de workflow de validation
 
   @Column({ nullable: true })
   cancellation_reason?: string;

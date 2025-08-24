@@ -1,4 +1,11 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+/**
+ * Service de gestion des paiements Stripe et de la facturation
+ * - Création de session Stripe
+ * - Gestion des webhooks
+ * - Génération de factures PDF
+ * - Remboursements
+ */
+import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Payment, PaymentTransactionStatus } from '../entities/payment.entity';
@@ -10,12 +17,15 @@ import { ConfigService } from '@nestjs/config';
 import { MoreThan, LessThan, In } from 'typeorm';
 const PDFDocument = require('pdfkit');
 import * as fs from 'fs';
+import * as http from 'http';
 import { Document, DocumentType } from '../../Document/entities/document.entity';
+import { MailService } from '../../../common/services/mail.service';
+import { NotificationService } from '@common/services/notification.service';
+import { NotificationType } from '../../Notification/entities/notification.entity';
 
 @Injectable()
 export class PaymentService {
   private readonly stripe: Stripe;
-  private readonly logger = new Logger(PaymentService.name);
 
   constructor(
     @InjectRepository(Payment)
@@ -26,9 +36,11 @@ export class PaymentService {
     private readonly userRepository: Repository<User>,
     @InjectRepository(EventParticipation)
     private readonly participationRepository: Repository<EventParticipation>,
-    private readonly configService: ConfigService,
     @InjectRepository(Document)
-    private readonly documentRepository: Repository<Document>
+    private readonly documentRepository: Repository<Document>,
+    private readonly configService: ConfigService,
+    private readonly mailService: MailService,
+    private readonly notificationService: NotificationService
   ) {
     // Initialisation de Stripe avec la clé secrète
     const stripeKey = this.configService.get<string>('STRIPE_SECRET_KEY');
@@ -41,10 +53,107 @@ export class PaymentService {
       this.stripe = new Stripe(stripeKey.trim(), {
         apiVersion: '2025-02-24.acacia'
       });
-      this.logger.log('✅ Stripe initialized successfully');
     } catch (error) {
-      this.logger.error('❌ Stripe initialization error:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Détecte automatiquement le port Flutter en vérifiant les ports courants
+   * @returns Le port détecté ou le port par défaut
+   */
+  private async detectFlutterPort(): Promise<string> {
+    // Ports courants pour Flutter web (ajout du port actuel 61013)
+    const commonPorts = ['61013', '60263', '59013', '56700', '56969', '8080', '3000', '8081', '8082', '8083', '8084', '8085'];
+    
+    // Vérifier d'abord les variables d'environnement
+    const envPort = process.env.FLUTTER_WEB_PORT || process.env.PORT;
+    if (envPort) {
+      console.log('[Stripe] Port détecté depuis les variables d\'environnement:', envPort);
+      return envPort;
+    }
+    
+    // Essayer de détecter le port Flutter en cours d'exécution
+    for (const port of commonPorts) {
+      try {
+        const isPortAvailable = await this.checkPort(port);
+        if (isPortAvailable) {
+          console.log(`[Stripe] Port Flutter détecté automatiquement: ${port}`);
+          return port;
+        }
+      } catch (error) {
+        // Port non disponible, continuer
+      }
+    }
+    
+    // Si aucun port n'est détecté, utiliser le port par défaut
+    console.log('[Stripe] Aucun port Flutter détecté, utilisation du port par défaut: 56700');
+    return '56700';
+  }
+
+  private checkPort(port: string): Promise<boolean> {
+    return new Promise((resolve) => {
+      const req = http.request({
+        hostname: 'localhost',
+        port: parseInt(port),
+        method: 'HEAD',
+        timeout: 1000
+      }, (res) => {
+        resolve(res.statusCode === 200);
+      });
+
+      req.on('error', () => {
+        resolve(false);
+      });
+
+      req.on('timeout', () => {
+        req.destroy();
+        resolve(false);
+      });
+
+      req.end();
+    });
+  }
+
+  private async createStripeSessionWithUrl(event: Event, user: User, successBaseUrl: string): Promise<Stripe.Checkout.Session> {
+    try {
+      const sessionData: Stripe.Checkout.SessionCreateParams = {
+        payment_method_types: ['card'],
+        line_items: [
+          {
+            price_data: {
+              currency: 'eur',
+              product_data: {
+                name: event.title,
+                description: event.description
+              },
+              unit_amount: Math.round(event.price * 100)
+            },
+            quantity: 1
+          }
+        ],
+        mode: 'payment' as Stripe.Checkout.Session.Mode,
+        success_url: `${successBaseUrl}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${successBaseUrl}/`,
+        customer_email: user.email,
+        expires_at: Math.floor(Date.now() / 1000) + 1800 // Session expire dans 30 minutes
+      };
+      
+      console.log('[Stripe] Données de session à envoyer:', {
+        eventTitle: event.title,
+        eventPrice: event.price,
+        unitAmount: Math.round(event.price * 100),
+        customerEmail: user.email,
+        successUrl: `${successBaseUrl}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+        cancelUrl: `${successBaseUrl}/`
+      });
+      
+      const session = await this.stripe.checkout.sessions.create(sessionData);
+      console.log('[Stripe] Session Stripe créée avec succès:', { sessionId: session.id, sessionUrl: session.url });
+      return session;
+    } catch (stripeError) {
+      console.error('[Stripe] Erreur lors de la création de la session Stripe', stripeError);
+      throw new BadRequestException('Erreur lors de la création de la session de paiement Stripe. Détail : ' + (stripeError.message || stripeError));
     }
   }
 
@@ -57,17 +166,108 @@ export class PaymentService {
    */
   async createPaymentSession(eventId: string, userId: string, isAdmin: boolean = false): Promise<string> {
     try {
+      console.log('[Stripe] Début de création de session de paiement', { eventId, userId, isAdmin });
+      
       // 1. Récupération de l'événement et de l'utilisateur
+      console.log('[Stripe] Recherche de l\'événement et de l\'utilisateur...');
       const event = await this.eventRepository.findOne({ where: { id: eventId } });
       const user = await this.userRepository.findOne({ where: { id: userId } });
 
+      console.log('[Stripe] Résultats de recherche:', { 
+        eventFound: !!event, 
+        userFound: !!user,
+        eventId: event?.id,
+        userId: user?.id,
+        eventPrice: event?.price,
+        userEmail: user?.email
+      });
+
       if (!event || !user) {
-        throw new Error('Event or user not found');
+        console.error('[Stripe] Event or user not found', { eventId, userId });
+        throw new NotFoundException('Event or user not found');
       }
+
+      if (!event.price || event.price <= 0) {
+        console.error('[Stripe] Prix de l\'événement invalide', { eventId, price: event.price });
+        throw new BadRequestException('Le prix de l\'événement est invalide');
+      }
+      if (!user.email) {
+        console.error('[Stripe] Email utilisateur manquant', { userId });
+        throw new BadRequestException('Email utilisateur manquant');
+      }
+
+      // URL dynamique pour Flutter web - détecte le port automatiquement
+      // Détection automatique du port Flutter
+      let flutterPort = await this.detectFlutterPort();
+      
+      // Vérifier si Flutter est accessible sur le port détecté
+      const isFlutterRunning = await this.checkPort(flutterPort);
+      if (!isFlutterRunning) {
+        console.warn(`[Stripe] ⚠️ Flutter non accessible sur le port ${flutterPort}`);
+        console.warn(`[Stripe] 🔄 Tentative de détection d'un autre port...`);
+        
+        // Essayer de détecter un autre port
+        const alternativePorts = ['3000', '60263', '59013', '56700', '56969', '8080'];
+        for (const altPort of alternativePorts) {
+          if (altPort !== flutterPort) {
+            const isAltPortAvailable = await this.checkPort(altPort);
+            if (isAltPortAvailable) {
+              flutterPort = altPort;
+              console.log(`[Stripe] ✅ Port alternatif détecté: ${altPort}`);
+              break;
+            }
+          }
+        }
+      } else {
+        console.log(`[Stripe] ✅ Flutter détecté sur le port ${flutterPort}`);
+      }
+      
+      const flutterUrl = `http://localhost:${flutterPort}`;
+      console.log('[Stripe] URL Flutter finale:', flutterUrl);
+      
+      // En production, utiliser l'URL de production
+      const isProduction = process.env.NODE_ENV === 'production';
+      const successBaseUrl = isProduction 
+        ? this.configService.get('FRONTEND_URL') || this.configService.get('FLUTTER_WEB_URL') || 'https://your-domain.com'
+        : flutterUrl;
+      
+      // Vérifier si Flutter est accessible
+      try {
+        const isFlutterRunning = await this.checkPort(flutterPort);
+        if (!isFlutterRunning) {
+          console.warn(`[Stripe] ⚠️ Flutter non accessible sur le port ${flutterPort}`);
+          console.warn(`[Stripe] 💡 Veuillez lancer Flutter avec: flutter run -d chrome`);
+          console.warn(`[Stripe] 🔄 Tentative de détection d'un autre port...`);
+          
+          // Essayer de détecter un autre port
+          const alternativePorts = ['3000', '8080','59013', '56700', '56969'];
+          for (const altPort of alternativePorts) {
+            if (altPort !== flutterPort) {
+              const isAltPortAvailable = await this.checkPort(altPort);
+              if (isAltPortAvailable) {
+                flutterPort = altPort;
+                console.log(`[Stripe] ✅ Port alternatif détecté: ${altPort}`);
+                break;
+              }
+            }
+          }
+        } else {
+          console.log(`[Stripe] ✅ Flutter détecté sur le port ${flutterPort}`);
+        }
+      } catch (error) {
+        console.warn('[Stripe] Erreur lors de la vérification du port Flutter:', error);
+      }
+      
+      console.log('[Stripe] Configuration finale:', {
+        isProduction,
+        successBaseUrl,
+        flutterUrl,
+        configFrontendUrl: this.configService.get('FRONTEND_URL'),
+        configFlutterWebUrl: this.configService.get('FLUTTER_WEB_URL')
+      });
 
       // 2. Vérification des droits administrateur
       const isAdminUser = isAdmin || user.type_user === 'ADMIN';
-      this.logger.log(`👤 Création de session par ${isAdminUser ? 'ADMIN' : 'USER'}: ${user.email}`);
 
       // 3. Vérification de la participation existante
       const existingParticipation = await this.participationRepository.findOne({
@@ -87,8 +287,35 @@ export class PaymentService {
       });
 
       if (completedPayment && !isAdminUser) {
-        this.logger.warn(`❌ L'utilisateur a déjà payé pour cet événement: ${event.title}`);
-        throw new Error('Vous avez déjà payé pour cet événement');
+        // Vérifier si l'utilisateur a une participation
+        const participation = await this.participationRepository.findOne({
+          where: {
+            eventId,
+            participantId: userId
+          }
+        });
+
+        if (participation) {
+          // L'utilisateur a déjà payé et a une participation
+          throw new ConflictException('Vous avez déjà payé pour cet événement');
+        } else {
+          // L'utilisateur a payé mais n'a pas de participation (cas d'erreur)
+          console.warn('[Stripe] Utilisateur a payé mais pas de participation trouvée:', { eventId, userId });
+          
+          // Créer automatiquement la participation manquante
+          const newParticipation = this.participationRepository.create({
+            eventId,
+            participantId: userId,
+            status: ParticipationStatus.APPROVED,
+            payment_status: PaymentStatus.PAID,
+            payment_intent_id: completedPayment.transaction_id
+          });
+          
+          await this.participationRepository.save(newParticipation);
+          console.log('[Stripe] Participation créée automatiquement pour l\'utilisateur qui a payé');
+          
+          throw new ConflictException('Vous avez déjà payé pour cet événement. Votre participation a été restaurée.');
+        }
       }
 
       // 5. Vérification des places disponibles (seulement si nouvelle participation)
@@ -97,9 +324,20 @@ export class PaymentService {
           where: { event: { id: eventId } }
         });
 
-        if (participantCount >= event.max_participants && !isAdminUser) {
-          this.logger.warn(`❌ L'événement est complet: ${event.title}`);
-          throw new Error('Cet événement est complet');
+        console.log(`[Stripe] 📊 Vérification des places: ${participantCount}/${event.max_participants} participants`);
+        console.log(`[Stripe] 📊 Event: ${event.title}, Max participants: ${event.max_participants}, Current: ${participantCount}`);
+
+        // TEMPORAIRE: Bypass pour test si l'événement est "test500" ou "test3000"
+        if ((event.title === 'test500' || event.title === 'test3000') && participantCount >= event.max_participants && !isAdminUser) {
+          console.log(`[Stripe] 🧪 TEST: Bypass de la vérification pour ${event.title}`);
+          console.log(`[Stripe] 🧪 TEST: Participant count: ${participantCount}, Max: ${event.max_participants}`);
+          console.log(`[Stripe] 🧪 TEST: Continuation du processus de paiement...`);
+        } else if (participantCount >= event.max_participants && !isAdminUser) {
+          console.log(`[Stripe] 🚨 Événement complet détecté: ${event.title}`);
+          console.log(`[Stripe] 🚨 Participant count: ${participantCount}, Max: ${event.max_participants}`);
+          
+          // Ne pas notifier ici - l'événement est déjà complet
+          throw new BadRequestException('Cet événement est complet');
         }
       }
 
@@ -117,32 +355,12 @@ export class PaymentService {
       });
 
       if (pendingPayment && !isAdminUser) {
-        this.logger.warn(`⚠️ Une session de paiement est déjà en cours`);
-        throw new Error('Vous avez déjà une session de paiement en cours. Veuillez la terminer ou attendre qu\'elle expire.');
+        throw new ConflictException('Vous avez déjà une session de paiement en cours. Veuillez la terminer ou attendre qu\'elle expire.');
       }
 
       // 8. Création de la session Stripe
-      const session = await this.stripe.checkout.sessions.create({
-        payment_method_types: ['card'],
-        line_items: [
-          {
-            price_data: {
-              currency: 'eur',
-              product_data: {
-                name: event.title,
-                description: event.description
-              },
-              unit_amount: Math.round(event.price * 100)
-            },
-            quantity: 1
-          }
-        ],
-        mode: 'payment',
-        success_url: `${this.configService.get('FRONTEND_URL')}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${this.configService.get('FRONTEND_URL')}/events`,
-        customer_email: user.email,
-        expires_at: Math.floor(Date.now() / 1000) + 1800 // Session expire dans 30 minutes
-      });
+      console.log('[Stripe] Création de la session Stripe...');
+      const session = await this.createStripeSessionWithUrl(event, user, successBaseUrl);
 
       // 9. Enregistrement du paiement en base de données
       const reference = `${event.id.substring(0, 6)}-${user.id.substring(0, 6)}-${Date.now().toString().substring(9, 13)}`;
@@ -159,11 +377,10 @@ export class PaymentService {
 
       await this.paymentRepository.save(payment);
       
-      this.logger.log(`✅ Payment session created for ${user.email} with reference ${reference}: ${session.url}`);
-      
+      console.log('[Stripe] Paiement enregistré en base, URL de session:', session.url);
       return session.url; // Retourne l'URL de paiement Stripe
     } catch (error) {
-      this.logger.error(`❌ Error creating payment session: ${error.message}`);
+      console.error('[Stripe] Erreur lors de la création de la session de paiement', error);
       throw error;
     }
   }
@@ -190,13 +407,11 @@ export class PaymentService {
     try {
       // 1. Vérification de base
       if (!rawBody) {
-        this.logger.error('❌ Pas de corps de requête');
         return { received: false, error: 'No request body' };
       }
 
       // 2. Log du payload reçu pour debug
       const payload = JSON.parse(rawBody.toString());
-      this.logger.log(`🔔 Webhook reçu: ${payload.type} - ID: ${payload.id}`);
 
       // 3. Vérification de la signature uniquement pour les événements de production
       const webhookSecret = this.configService.get('STRIPE_WEBHOOK_SECRET');
@@ -210,41 +425,45 @@ export class PaymentService {
             webhookSecret
           );
         } catch (err) {
-          this.logger.error(`❌ Erreur de signature: ${err.message}`);
           return { received: false, error: 'Invalid signature' };
         }
       } else {
         // En mode test, on accepte sans vérification
         event = payload;
-        this.logger.log('ℹ️ Mode test détecté - signature ignorée');
       }
 
       // 4. Traitement des événements
       switch (event.type) {
         case 'checkout.session.completed':
-          this.logger.log(`💰 Traitement du paiement réussi - Session ID: ${event.id}`);
           await this.handleSuccessfulPayment(event.data.object);
           break;
 
         case 'checkout.session.expired':
-          this.logger.log(`⏰ Session expirée - Session ID: ${event.id}`);
           await this.handleExpiredSession(event.data.object);
           break;
 
         case 'payment_intent.payment_failed':
-          this.logger.log(`❌ Échec du paiement - Intent ID: ${event.id}`);
           await this.handlePaymentFailure(event.data.object.id);
           break;
 
+        case 'charge.refunded':
+          await this.handleRefundCompleted(event.data.object);
+          break;
+
+        case 'refund.created':
+          await this.handleRefundCreated(event.data.object);
+          break;
+
+        case 'refund.updated':
+          await this.handleRefundUpdated(event.data.object);
+          break;
+
         default:
-          this.logger.debug(`ℹ️ Événement ignoré: ${event.type} - ID: ${event.id}`);
           break;
       }
 
       return { received: true, type: event.type };
     } catch (err) {
-      this.logger.error(`❌ Erreur webhook: ${err.message}`, err.stack);
-      // On retourne quand même 200 pour éviter les retries de Stripe
       return { received: false, error: err.message };
     }
   }
@@ -255,31 +474,27 @@ export class PaymentService {
    */
   private async handleSuccessfulPayment(session: Stripe.Checkout.Session) {
     try {
-      // 1. Vérification si c'est une session de test
-      const isTestSession = session.id.startsWith('cs_test_');
+      console.log('[Stripe] Traitement du paiement réussi pour la session:', session.id);
       
-      // 2. Récupération du paiement
+      // 1. Récupération du paiement
       const payment = await this.paymentRepository.findOne({
         where: { transaction_id: session.id },
         relations: ['event', 'user']
       });
 
       if (!payment) {
-        if (isTestSession) {
-          this.logger.log(`ℹ️ Session de test détectée: ${session.id}`);
-          return { received: true };
-        } else {
-          this.logger.error(`❌ Paiement non trouvé pour la session: ${session.id}`);
-          return;
-        }
+        console.error('[Stripe] Paiement non trouvé pour la session:', session.id);
+        return;
       }
 
-      // 3. Mise à jour du statut du paiement
+      // 2. Mise à jour du statut du paiement
       payment.status = PaymentTransactionStatus.COMPLETED;
-      payment.completedAt = new Date();
+      payment.stripe_payment_intent_id = session.payment_intent as string;
       await this.paymentRepository.save(payment);
 
-      // 4. Mise à jour de la participation
+      console.log('[Stripe] Paiement marqué comme complété:', payment.id);
+
+      // 3. Création ou mise à jour de la participation
       let participation = await this.participationRepository.findOne({
         where: {
           eventId: payment.event.id,
@@ -288,7 +503,7 @@ export class PaymentService {
       });
 
       if (!participation) {
-        // Création d'une nouvelle participation si nécessaire
+        // Création d'une nouvelle participation
         participation = this.participationRepository.create({
           eventId: payment.event.id,
           participantId: payment.user.id,
@@ -296,38 +511,77 @@ export class PaymentService {
           payment_status: PaymentStatus.PAID,
           payment_intent_id: session.payment_intent as string
         });
+        console.log('[Stripe] Nouvelle participation créée pour l\'événement:', payment.event.title);
       } else {
         // Mise à jour de la participation existante
         participation.status = ParticipationStatus.APPROVED;
         participation.payment_status = PaymentStatus.PAID;
         participation.payment_intent_id = session.payment_intent as string;
+        console.log('[Stripe] Participation mise à jour pour l\'événement:', payment.event.title);
       }
 
       await this.participationRepository.save(participation);
-      this.logger.log(`✅ Paiement complété pour: ${payment.user.email}`);
 
-      // Génération et enregistrement de la facture PDF
+      // 4. Vérifier si l'événement vient de devenir complet et notifier
+      const finalParticipantCount = await this.participationRepository.count({
+        where: { event: { id: payment.event.id } }
+      });
+      
+      if (finalParticipantCount === payment.event.max_participants) {
+        console.log(`[Stripe] 🎉 Événement "${payment.event.title}" vient de devenir complet !`);
+        console.log(`[Stripe] 📊 Participant count: ${finalParticipantCount}/${payment.event.max_participants}`);
+        
+        // Notifier tous les utilisateurs que l'événement est maintenant complet
+        await this.notifyEventFull(payment.event);
+      }
+
+      // 5. Génération et enregistrement de la facture PDF
       const invoicePath = `uploads/invoices/invoice-${payment.id}.pdf`;
       await this.generateInvoicePDF(payment, invoicePath);
 
-      const document = this.documentRepository.create({
-        title: `Facture - ${payment.reference}`,
-        description: `Facture pour l'événement ${payment.event.title}`,
-        file_url: invoicePath,
-        type: DocumentType.INVOICE,
-        event: payment.event,
-        uploader: payment.user,
-        is_public: false,
-        metadata: {
-          paymentId: payment.id,
-          amount: payment.amount,
-          date: payment.completedAt,
-          reference: payment.reference
-        }
-      });
-      await this.documentRepository.save(document);
+      // 6. Envoi d'email de confirmation
+      try {
+        await this.mailService.sendMail(
+          payment.user.email,
+          'Paiement confirmé - Inscription à l\'événement',
+          `Votre paiement pour l'événement "${payment.event.title}" a été confirmé avec succès.`,
+          `
+            <h2>Paiement confirmé !</h2>
+            <p>Bonjour,</p>
+            <p>Votre paiement pour l'événement <strong>${payment.event.title}</strong> a été confirmé avec succès.</p>
+            <p>Détails :</p>
+            <ul>
+              <li><strong>Événement :</strong> ${payment.event.title}</li>
+              <li><strong>Date :</strong> ${payment.event.date.toLocaleDateString('fr-FR')}</li>
+              <li><strong>Lieu :</strong> ${payment.event.location}</li>
+              <li><strong>Montant :</strong> ${payment.amount}€</li>
+            </ul>
+            <p>Vous recevrez bientôt un email avec les détails de l'événement.</p>
+            <p>Cordialement,<br>L'équipe Kiwi Club</p>
+          `
+        );
+        console.log('[Stripe] Email de confirmation envoyé à:', payment.user.email);
+      } catch (emailError) {
+        console.error('[Stripe] Erreur lors de l\'envoi de l\'email de confirmation:', emailError);
+      }
+
+      // 7. Envoi d'une notification par email
+      try {
+        await this.notificationService.sendPaymentConfirmationEmail(
+          payment.user.email,
+          payment.user.email,
+          payment.event.title,
+          payment.amount
+        );
+        console.log('[Stripe] Notification de confirmation envoyée à:', payment.user.email);
+      } catch (notificationError) {
+        console.error('[Stripe] Erreur lors de l\'envoi de la notification:', notificationError);
+      }
+
+      console.log('[Stripe] Paiement traité avec succès pour l\'événement:', payment.event.title);
     } catch (error) {
-      this.logger.error(`❌ Erreur lors du traitement du paiement réussi: ${error.message}`);
+      console.error('[Stripe] Erreur lors du traitement du paiement réussi:', error);
+      throw error;
     }
   }
 
@@ -343,7 +597,6 @@ export class PaymentService {
     if (payment) {
       payment.status = PaymentTransactionStatus.FAILED;
       await this.paymentRepository.save(payment);
-      this.logger.warn(`⚠️ Session expirée pour: ${payment.transaction_id}`);
     }
   }
 
@@ -365,10 +618,7 @@ export class PaymentService {
       participation.payment_status = PaymentStatus.PAID;
 
       await this.participationRepository.save(participation);
-      
-      this.logger.log(`✅ Paiement validé pour la participation: ${participation.id}`);
     } catch (error) {
-      this.logger.error(`Erreur lors du traitement du paiement: ${error.message}`);
       throw error;
     }
   }
@@ -389,11 +639,230 @@ export class PaymentService {
 
       participation.payment_status = PaymentStatus.FAILED;
       await this.participationRepository.save(participation);
-      
-      this.logger.warn(`⚠️ Échec du paiement pour la participation: ${participation.id}`);
     } catch (error) {
-      this.logger.error(`Erreur lors du traitement de l'échec du paiement: ${error.message}`);
       throw error;
+    }
+  }
+
+  /**
+   * Gère un remboursement créé
+   * @param refund - Objet remboursement Stripe
+   */
+  private async handleRefundCreated(refund: Stripe.Refund): Promise<void> {
+    try {
+      console.log(`🔄 Remboursement créé: ${refund.id} pour payment_intent: ${refund.payment_intent}`);
+      
+      // Récupérer le paiement via le payment_intent
+      const payment = await this.paymentRepository.findOne({
+        where: { transaction_id: refund.payment_intent as string },
+        relations: ['event', 'user']
+      });
+
+      if (payment) {
+        // Mettre à jour le statut du paiement
+        payment.status = PaymentTransactionStatus.REFUNDED;
+        payment.refundedAt = new Date();
+        await this.paymentRepository.save(payment);
+
+        // Mettre à jour la participation
+        const participation = await this.participationRepository.findOne({
+          where: {
+            eventId: payment.event.id,
+            participantId: payment.user.id
+          }
+        });
+
+        if (participation) {
+          participation.payment_status = PaymentStatus.REFUNDED;
+          await this.participationRepository.save(participation);
+        }
+
+        // Envoi d'un email de confirmation de remboursement
+        await this.mailService.sendMail(
+          payment.user.email,
+          'Remboursement confirmé',
+          `Votre remboursement pour l'événement "${payment.event.title}" a été traité.`,
+          `
+            <h1>Remboursement confirmé</h1>
+            <p>Bonjour,</p>
+            <p>Nous vous confirmons que votre remboursement pour l'événement <strong>${payment.event.title}</strong> a été traité avec succès.</p>
+            <p>Détails du remboursement :</p>
+            <ul>
+              <li>Montant remboursé : ${payment.amount}€</li>
+              <li>Référence : ${payment.reference}</li>
+              <li>Date : ${new Date().toLocaleDateString()}</li>
+              <li>ID Remboursement : ${refund.id}</li>
+            </ul>
+            <p>Le remboursement sera visible sur votre compte bancaire dans les 5-10 jours ouvrables.</p>
+            <p>Nous vous remercions de votre compréhension.</p>
+          `
+        );
+
+        // Notification pour l'utilisateur
+        await this.notificationService.sendRefundNotificationEmail(
+          payment.user.email,
+          payment.user.email,
+          payment.event.title,
+          payment.amount,
+          'Événement annulé'
+        );
+      }
+    } catch (error) {
+      console.error('Erreur lors du traitement du remboursement créé:', error);
+    }
+  }
+
+  /**
+   * Gère un remboursement complété
+   * @param charge - Objet charge Stripe remboursée
+   */
+  private async handleRefundCompleted(charge: Stripe.Charge): Promise<void> {
+    try {
+      console.log(`✅ Remboursement complété pour charge: ${charge.id}`);
+      
+      // Récupérer le paiement via le payment_intent de la charge
+      const payment = await this.paymentRepository.findOne({
+        where: { transaction_id: charge.payment_intent as string },
+        relations: ['event', 'user']
+      });
+
+      if (payment) {
+        // Mettre à jour le statut du paiement
+        payment.status = PaymentTransactionStatus.REFUNDED;
+        payment.refundedAt = new Date();
+        await this.paymentRepository.save(payment);
+
+        console.log(`✅ Paiement ${payment.id} marqué comme remboursé`);
+      }
+    } catch (error) {
+      console.error('Erreur lors du traitement du remboursement complété:', error);
+    }
+  }
+
+  /**
+   * Gère une mise à jour de remboursement
+   * @param refund - Objet remboursement Stripe mis à jour
+   */
+  private async handleRefundUpdated(refund: Stripe.Refund): Promise<void> {
+    try {
+      console.log(`📝 Remboursement mis à jour: ${refund.id} - Statut: ${refund.status}`);
+      
+      // Récupérer le paiement via le payment_intent
+      const payment = await this.paymentRepository.findOne({
+        where: { transaction_id: refund.payment_intent as string },
+        relations: ['event', 'user']
+      });
+
+      if (payment) {
+        // Mettre à jour le statut selon le statut du remboursement
+        if (refund.status === 'succeeded') {
+          payment.status = PaymentTransactionStatus.REFUNDED;
+          payment.refundedAt = new Date();
+        } else if (refund.status === 'failed') {
+          payment.status = PaymentTransactionStatus.COMPLETED; // Remettre en statut payé
+        }
+        
+        await this.paymentRepository.save(payment);
+        console.log(`📝 Paiement ${payment.id} mis à jour selon le statut du remboursement: ${refund.status}`);
+      }
+    } catch (error) {
+      console.error('Erreur lors du traitement de la mise à jour du remboursement:', error);
+    }
+  }
+
+  /**
+   * Notifie tous les utilisateurs qu'un événement est complet
+   * @param event - L'événement qui est complet
+   */
+  private async notifyEventFull(event: Event) {
+    try {
+      console.log(`[Notification] 🚨 Début de notification d'événement complet: ${event.title}`);
+      
+      // Récupérer tous les utilisateurs
+      const users = await this.userRepository.find();
+      console.log(`[Notification] 📧 Utilisateurs trouvés: ${users.length}`);
+      
+      for (const user of users) {
+        try {
+          console.log(`[Notification] 📤 Envoi à ${user.email}...`);
+          
+          // Envoyer un email de notification
+          const emailResult = await this.notificationService.sendEmail(
+            user.email,
+            'Événement complet - Kiwi Club',
+            `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+              <div style="background: linear-gradient(135deg, #FF5722, #D84315); color: white; padding: 20px; text-align: center;">
+                <h1>🍃 Kiwi Club</h1>
+                <h2>Événement complet</h2>
+              </div>
+              
+              <div style="padding: 20px; background: #f9f9f9;">
+                <p>Bonjour ${user.prenom || user.email},</p>
+                
+                <p>L'événement suivant est maintenant complet :</p>
+                
+                <div style="background: white; padding: 15px; border-radius: 8px; margin: 15px 0;">
+                  <h3 style="color: #FF5722; margin-top: 0;">${event.title}</h3>
+                  <p><strong>Date :</strong> ${event.date.toLocaleDateString('fr-FR')} à ${event.date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</p>
+                  <p><strong>Lieu :</strong> ${event.location}</p>
+                  <p><strong>Prix :</strong> ${event.price}€</p>
+                </div>
+                
+                <p>Malheureusement, il n'y a plus de places disponibles pour cet événement.</p>
+                
+                <p>Restez connecté pour découvrir nos prochains événements !</p>
+                
+                <p>Cordialement,<br>L'équipe Kiwi Club</p>
+              </div>
+              
+              <div style="background: #333; color: white; padding: 15px; text-align: center; font-size: 12px;">
+                <p>© 2024 Kiwi Club. Tous droits réservés.</p>
+              </div>
+            </div>
+            `,
+            `L'événement "${event.title}" est maintenant complet. Date: ${event.date.toLocaleDateString('fr-FR')}, Lieu: ${event.location}, Prix: ${event.price}€`
+          );
+          console.log(`[Notification] 📧 Email envoyé à ${user.email}: ${emailResult}`);
+
+          // Créer une notification persistante en base de données
+          const notification = await this.notificationService.createNotification(
+            user.id,
+            'Événement complet',
+            `L'événement "${event.title}" est maintenant complet. Il n'y a plus de places disponibles.`,
+            NotificationType.EVENT_FULL,
+            {
+              eventId: event.id,
+              eventTitle: event.title,
+              eventDate: event.date,
+              eventLocation: event.location,
+              eventPrice: event.price
+            }
+          );
+          console.log(`[Notification] 💾 Notification persistante créée pour ${user.email}: ${notification.id}`);
+
+          // Envoyer une notification push
+          const pushResult = await this.notificationService.sendPushNotificationToUser(
+            user.id,
+            'Événement complet - Kiwi Club',
+            `L'événement "${event.title}" est maintenant complet. Il n'y a plus de places disponibles.`,
+            {
+              type: 'event_full',
+              eventId: event.id,
+              eventTitle: event.title
+            }
+          );
+          console.log(`[Notification] 📱 Push notification envoyée à ${user.email}: ${pushResult}`);
+          
+          console.log(`[Notification] ✅ Toutes les notifications envoyées à ${user.email} pour événement complet`);
+        } catch (error) {
+          console.error(`[Notification] ❌ Erreur lors de l'envoi à ${user.email}:`, error);
+        }
+      }
+      
+      console.log(`[Notification] 🎉 Notification d'événement complet terminée pour ${event.title}`);
+    } catch (error) {
+      console.error('[Notification] ❌ Erreur lors de la notification d\'événement complet:', error);
     }
   }
 
@@ -416,7 +885,8 @@ export class PaymentService {
         throw new NotFoundException('Participation non trouvée');
       }
 
-      participation.status = ParticipationStatus.CONFIRMED;
+      // Correction : après paiement, status = APPROVED (jamais CONFIRMED ici)
+      participation.status = ParticipationStatus.APPROVED; // Seule la confirmation de présence met CONFIRMED
       participation.payment_status = PaymentStatus.PAID;
       participation.payment_intent_id = `pi_simulated_${Date.now()}`;
       
@@ -443,14 +913,11 @@ export class PaymentService {
 
       await this.paymentRepository.save(payment);
 
-      this.logger.log(`✅ Simulation de paiement réussie pour l'événement: ${eventId}`);
-
       return {
         participation,
         payment
       };
     } catch (error) {
-      this.logger.error(`❌ Erreur lors de la simulation du paiement: ${error.message}`);
       throw error;
     }
   }
@@ -492,12 +959,10 @@ export class PaymentService {
         // 4. Mettre à jour le statut du paiement en base
         payment.status = PaymentTransactionStatus.REFUNDED;
         await this.paymentRepository.save(payment);
-        this.logger.log(`✅ Remboursement Stripe effectué pour le paiement ${payment.id} (participant: ${participantId}, event: ${eventId})`);
       } else {
         throw new Error(`Le remboursement Stripe n'a pas réussi: ${refund.status}`);
       }
     } catch (err) {
-      this.logger.error(`Erreur lors du remboursement Stripe: ${err.message}`);
       throw err;
     }
   }
@@ -509,18 +974,44 @@ export class PaymentService {
     const payment = await this.paymentRepository.findOne({
       where: {
         event: { id: eventId },
-        user: { id: participantId },
-        status: In([PaymentTransactionStatus.COMPLETED, PaymentTransactionStatus.REFUNDED])
+        user: { id: participantId }
       }
     });
 
     if (!payment) {
-      throw new NotFoundException('Paiement non trouvé pour ce participant et cet événement');
+      throw new NotFoundException('Paiement non trouvé');
     }
 
     payment.status = status;
     await this.paymentRepository.save(payment);
-    this.logger.log(`✅ Statut du paiement mis à jour à ${status} pour le paiement ${payment.id}`);
+  }
+
+  /**
+   * Teste l'envoi d'une notification d'événement complet
+   * @param eventId - ID de l'événement
+   */
+  async testEventFullNotification(eventId: string) {
+    try {
+      console.log(`[Test] 🧪 Test de notification d'événement complet pour: ${eventId}`);
+      
+      const event = await this.eventRepository.findOne({ where: { id: eventId } });
+      if (!event) {
+        throw new NotFoundException('Événement non trouvé');
+      }
+
+      // Simuler la notification d'événement complet
+      await this.notifyEventFull(event);
+      
+      console.log(`[Test] ✅ Notification d'événement complet testée avec succès pour: ${event.title}`);
+      
+      return {
+        eventTitle: event.title,
+        message: 'Notification d\'événement complet envoyée avec succès'
+      };
+    } catch (error) {
+      console.error(`[Test] ❌ Erreur lors du test de notification:`, error);
+      throw error;
+    }
   }
 
   async refundAllPaymentsForEvent(eventId: string): Promise<void> {
@@ -531,7 +1022,6 @@ export class PaymentService {
       .where('eventId = :eventId', { eventId })
       .andWhere('status = :status', { status: PaymentTransactionStatus.COMPLETED })
       .execute();
-    console.log('Paiements mis à jour:', result.affected);
   }
 
   // Ajout de la méthode utilitaire pour générer la facture PDF
@@ -546,19 +1036,19 @@ export class PaymentService {
       doc.moveDown();
 
       // Informations de l'événement
-      doc.fontSize(12).text(`Événement: ${payment.event.title}`);
-      doc.text(`Date: ${payment.event.date.toLocaleDateString()}`);
+      doc.fontSize(12).text(`Événement: ${payment.event?.title || 'N/A'}`);
+      doc.text(`Date: ${payment.event?.date ? payment.event.date.toLocaleDateString('fr-FR') : 'N/A'}`);
       doc.moveDown();
 
       // Informations du client
-      doc.text(`Client: ${payment.user.prenom} ${payment.user.nom}`);
-      doc.text(`Email: ${payment.user.email}`);
+      doc.text(`Client: ${payment.user?.prenom || 'N/A'} ${payment.user?.nom || 'N/A'}`);
+      doc.text(`Email: ${payment.user?.email || 'N/A'}`);
       doc.moveDown();
 
       // Détails du paiement
       doc.text(`Montant: ${payment.amount}€`);
       doc.text(`Référence: ${payment.reference}`);
-      doc.text(`Date de paiement: ${payment.completedAt.toLocaleDateString()}`);
+      doc.text(`Date de paiement: ${payment.completedAt ? payment.completedAt.toLocaleDateString('fr-FR') : new Date().toLocaleDateString('fr-FR')}`);
       doc.moveDown();
 
       // Pied de page
@@ -571,7 +1061,53 @@ export class PaymentService {
         writeStream.on('error', reject);
       });
     } catch (error) {
-      this.logger.error(`❌ Erreur lors de la génération du PDF: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Vérifie un paiement par session ID
+   * @param sessionId - ID de la session Stripe
+   * @param userId - ID de l'utilisateur
+   * @returns Détails du paiement
+   */
+  async verifyPayment(sessionId: string, userId: string): Promise<any> {
+    try {
+      const payment = await this.paymentRepository.findOne({
+        where: { 
+          transaction_id: sessionId,
+          user: { id: userId }
+        },
+        relations: ['event', 'user']
+      });
+
+      if (!payment) {
+        throw new NotFoundException('Paiement non trouvé');
+      }
+
+      return {
+        id: payment.id,
+        amount: payment.amount,
+        status: payment.status,
+        reference: payment.reference,
+        createdAt: payment.createdAt,
+        completedAt: payment.completedAt,
+        event: payment.event ? {
+          id: payment.event.id,
+          title: payment.event.title,
+          description: payment.event.description,
+          date: payment.event.date,
+          location: payment.event.location,
+          price: payment.event.price
+        } : null,
+        user: payment.user ? {
+          id: payment.user.id,
+          email: payment.user.email,
+          nom: payment.user.nom,
+          prenom: payment.user.prenom
+        } : null
+      };
+    } catch (error) {
       throw error;
     }
   }

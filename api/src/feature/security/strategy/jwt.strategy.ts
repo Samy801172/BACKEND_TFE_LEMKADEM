@@ -19,11 +19,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     private readonly credentialRepository: Repository<Credential>
   ) {
     const secret = configManager.getValue(ConfigKey.JWT_TOKEN_SECRET);
-    // Log complet pour debug
-    console.log('--- JWT STRATEGY INIT ---');
-    console.log('SECRET UTILISÉ POUR JWT:', secret, 'LENGTH:', secret?.length);
+    
+    // DEBUG: Affichage du secret JWT utilisé (à activer uniquement en développement)
     if (!secret) {
-      console.error('ERREUR: Le secret JWT est undefined ou vide !');
+      // ERREUR: Le secret JWT est undefined ou vide ! (log supprimé pour propreté)
     }
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
@@ -39,17 +38,14 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
   async validate(payload: any) {
     try {
-      this.logger.debug('🔍 Validation du token JWT avec payload:', payload);
-      // Log du payload reçu
-      console.log('PAYLOAD REÇU DANS validate:', payload);
+      // DEBUG: Validation du token JWT avec payload (à activer uniquement en développement)
       // 1. Vérification des credentials
       const credential = await this.credentialRepository.findOne({
         where: { credential_id: payload.sub }
       });
       
       if (!credential) {
-        this.logger.error('❌ Credentials non trouvés pour ID:', payload.sub);
-        console.error('❌ Credentials non trouvés pour ID:', payload.sub);
+        // DEBUG: Credentials non trouvés pour l'ID (à activer uniquement en développement)
         throw new UnauthorizedException('Invalid credentials');
       }
 
@@ -60,27 +56,23 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       });
       
       if (!user) {
-        this.logger.error('❌ Utilisateur non trouvé pour email:', credential.mail);
-        console.error('❌ Utilisateur non trouvé pour email:', credential.mail);
+        // DEBUG: Utilisateur non trouvé pour l'email (à activer uniquement en développement)
         throw new UnauthorizedException('User not found');
       }
 
       // 3. Construction de l'objet utilisateur retourné
       const userData = { 
         userId: user.id,
-        role: user.type_user,
+        role: user.type_user.toUpperCase(),
         email: user.email,
-        username: credential.username // Ajout du username pour le logging
+        username: credential.username
       };
 
-      this.logger.debug('✅ Token validé pour utilisateur:', userData);
-      console.log('✅ Token validé pour utilisateur:', userData);
-
+      // DEBUG: Token validé pour utilisateur (à activer uniquement en développement)
       return userData;
       
     } catch (error) {
-      this.logger.error('❌ Erreur lors de la validation du token:', error.message);
-      console.error('❌ Erreur lors de la validation du token:', error.message);
+      // DEBUG: Erreur lors de la validation du token (à activer uniquement en développement)
       throw new UnauthorizedException('Token validation failed');
     }
   }

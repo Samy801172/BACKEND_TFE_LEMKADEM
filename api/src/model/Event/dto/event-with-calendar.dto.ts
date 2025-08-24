@@ -1,5 +1,5 @@
 import { Event } from '../entities/event.entity';
-import { PaymentStatus } from '../entities/event-participation.entity';
+import { PaymentStatus, ParticipationStatus } from '../entities/event-participation.entity';
 
 export class EventWithCalendarDto {
   id: string;
@@ -12,6 +12,7 @@ export class EventWithCalendarDto {
   type_event: string;
   image_url?: string;
   payment_status: PaymentStatus;
+  status: string;
   calendar_link?: string;
 
   constructor(event: Event, participation: any) {
@@ -25,6 +26,7 @@ export class EventWithCalendarDto {
     this.type_event = event.type_event;
     this.image_url = event.image_url;
     this.payment_status = participation?.payment_status;
+    this.status = participation?.status;
     
     // Générer le lien du calendrier seulement si le paiement est effectué
     if (participation?.payment_status === PaymentStatus.PAID) {

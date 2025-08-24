@@ -14,7 +14,7 @@ export class MessageController {
   @Post()
   @ApiResponse({ status: 201, description: 'Message sent successfully' })
   create(@Request() req, @Body() createMessageDto: CreateMessageDto) {
-    return this.messageService.create(req.user.id, createMessageDto);
+    return this.messageService.create(req.user.userId, createMessageDto);
   }
 
   @Get()
@@ -27,21 +27,34 @@ export class MessageController {
     @Query('limit') limit?: number
   ) {
     return this.messageService.findAll(
-      req.user.id, 
+      req.user.userId, 
       { page: page || 1, limit: limit || 10 }
     );
   }
 
-  @Get(':id')
-  @ApiResponse({ status: 200, description: 'Return a message by id' })
-  findOne(@Param('id') id: string) {
-    return this.messageService.findOne(id);
+  /**
+   * IMPORTANT : Les routes spécifiques doivent être déclarées avant les routes dynamiques (ex: ':id')
+   * Sinon, /messages/received ou /messages/sent seront interprétées comme des IDs !
+   */
+
+  /**
+   * Récupère tous les messages reçus par l'utilisateur connecté
+   * @returns Liste des messages reçus
+   */
+  @ApiResponse({ status: 200, description: "Messages reçus par l'utilisateur connecté" })
+  @Get('received')
+  getReceivedMessages(@Request() req) {
+    return this.messageService.getReceivedMessages(req.user.userId);
   }
 
-  @Post(':id/read')
-  @ApiResponse({ status: 200, description: 'Mark message as read' })
-  markAsRead(@Param('id') id: string) {
-    return this.messageService.markAsRead(id);
+  /**
+   * Récupère tous les messages envoyés par l'utilisateur connecté
+   * @returns Liste des messages envoyés
+   */
+  @ApiResponse({ status: 200, description: "Messages envoyés par l'utilisateur connecté" })
+  @Get('sent')
+  getSentMessages(@Request() req) {
+    return this.messageService.getSentMessages(req.user.userId);
   }
 
   /**
@@ -84,6 +97,18 @@ export class MessageController {
   @ApiResponse({ status: 200, description: 'Retourne tous les messages non lus' })
   async getUnreadMessages(@Req() req) {
     return this.messageService.findUnread(req.user.userId);
+  }
+
+  @Get(':id')
+  @ApiResponse({ status: 200, description: 'Return a message by id' })
+  findOne(@Param('id') id: string) {
+    return this.messageService.findOne(id);
+  }
+
+  @Post(':id/read')
+  @ApiResponse({ status: 200, description: 'Mark message as read' })
+  markAsRead(@Param('id') id: string) {
+    return this.messageService.markAsRead(id);
   }
 
   /**

@@ -3,6 +3,7 @@ import { UserRole } from './user-role.enum';
 import { Message } from '../../Message/entities/message.entity';
 import { Event } from '../../Event/entities/event.entity';
 import { EventParticipation } from '../../Event/entities/event-participation.entity';
+import { Contact } from '../../Contact/entities/contact.entity';
 
 // L'entité User définit la structure d'un utilisateur dans la base de données
 @Entity('users')
@@ -50,6 +51,9 @@ export class User {
   @Column({ nullable: true })
   linkedin?: string;
 
+  @Column({ nullable: true })
+  fcm_token?: string;
+
   @Column({ default: true })
   isActive: boolean;
 
@@ -71,4 +75,7 @@ export class User {
 
   @OneToMany(() => Message, message => message.receiver)
   receivedMessages: Message[];
+
+  @OneToMany(() => Contact, contact => contact.owner)
+  contacts: Contact[];
 } 

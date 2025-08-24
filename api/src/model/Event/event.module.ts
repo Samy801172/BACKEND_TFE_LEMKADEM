@@ -9,6 +9,7 @@ import { PaymentModule } from '../Payment/payment.module';
 import { MailService } from '@common/services/mail.service';
 import { MailModule } from '@common/services/mail.module';
 import { UserModule } from '../User/user.module';
+import { NotificationModule } from '../Notification/notification.module';
 
 @Module({
   imports: [
@@ -16,7 +17,8 @@ import { UserModule } from '../User/user.module';
     SecurityModule,
     PaymentModule,
     MailModule,
-    UserModule
+    UserModule,
+    NotificationModule
   ],
   controllers: [EventController],
   providers: [EventService, MailService],

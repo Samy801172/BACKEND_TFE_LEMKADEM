@@ -28,6 +28,8 @@ import { ApiCodeResponse } from '@common/config';
 import { MailService } from '@common/services/mail.service';
 import { v4 as uuidv4 } from 'uuid';
 
+console.log('=== FICHIER SECURITY.SERVICE.TS CHARGÉ ===');
+
 // Exception personnalisée pour mot de passe erroné
 class InvalidPasswordException extends ApiException {
   constructor() {
@@ -85,15 +87,38 @@ export class SecurityService {
     try {
       this.logger.log(`🔐 Tentative de connexion avec: ${payload.username}`);
       
-      const credential = await this.repository
-        .createQueryBuilder('credential')
-        .where('credential.mail = :identifier OR credential.username = :identifier', {
-          identifier: payload.username
-        })
-        .getOne();
+      let credential;
+      
+      // Si c'est une connexion sociale (Google/Facebook)
+      if (payload.socialLogin && (payload.googleHash || payload.facebookHash)) {
+        this.logger.log(`🔐 Tentative de connexion sociale avec: ${payload.username}`);
+        
+        // Chercher par email et googleHash/facebookHash
+        credential = await this.repository
+          .createQueryBuilder('credential')
+          .where('credential.mail = :email', { email: payload.username })
+          .andWhere('(credential.googleHash = :googleHash OR credential.facebookHash = :facebookHash)', {
+            googleHash: payload.googleHash || '',
+            facebookHash: payload.facebookHash || ''
+          })
+          .getOne();
+          
+        if (!credential) {
+          this.logger.warn(`❌ Utilisateur social non trouvé: ${payload.username}`);
+          throw new UserNotFoundException();
+        }
+      } else {
+        // Connexion classique par email/username
+        credential = await this.repository
+          .createQueryBuilder('credential')
+          .where('credential.mail = :identifier OR credential.username = :identifier', {
+            identifier: payload.username
+          })
+          .getOne();
 
-      if (!credential) {
-        throw new UserNotFoundException();
+        if (!credential) {
+          throw new UserNotFoundException();
+        }
       }
 
       // Récupérer et mettre à jour l'utilisateur si nécessaire
@@ -178,7 +203,9 @@ export class SecurityService {
         nom: payload.nom,
         prenom: payload.prenom,
         entreprise: payload.entreprise,
-        type_user: isAdmin ? UserRole.ADMIN : UserRole.MEMBER
+        type_user: isAdmin ? UserRole.ADMIN : UserRole.MEMBER,
+        // Ajout automatique de la photo par défaut si aucune photo n'est fournie
+        photo: 'default.jpg', // <-- photo par défaut
       });
 
       try {
@@ -562,8 +589,10 @@ export class SecurityService {
     credential.resetTokenExpires = new Date(Date.now() + 3600 * 1000); // 1h
     await this.repository.save(credential);
 
-    // Générer le lien de réinitialisation (à adapter selon le front)
-    const resetLink = `http://localhost:4200/reset-password?token=${token}`;
+    // Générer le lien de réinitialisation (corrigé pour Angular : /auth/reset-password/)
+    const resetLink = `http://localhost:4200/auth/reset-password/${token}`;
+    // Log explicite pour vérifier le lien généré (doit apparaître dans la console du backend)
+    console.log('Lien de reset envoyé :', resetLink);
     await this.mailService.sendMail(
       email,
       'Réinitialisation du mot de passe',
@@ -577,7 +606,18 @@ export class SecurityService {
    * Réinitialisation du mot de passe via le token
    * - Vérifie le token et sa validité
    * - Met à jour le mot de passe
-   * - Supprime le token de la base
+   * - Supprime le token de la base[Nest] 12356  - 21/06/2025 22:47:14    WARN [SecurityService] 🚫 Mot de passe erroné pour: JURYTEST2
+[Nest] 12356  - 21/06/2025 22:47:14   ERROR [SecurityService] ❌ Échec 
+de connexion: Invalid Password Exception
+[Nest] 12356  - 21/06/2025 22:47:14   ERROR [ApiInterceptor] InvalidPasswordException: Invalid Password Exception
+[Nest] 12356  - 21/06/2025 22:48:35     LOG [MailService] Tentative d'envoi d'email à jurytest2@hotmail.be
+[Nest] 12356  - 21/06/2025 22:48:36     LOG [MailService] ✅ Email envo
+yé avec succès à jurytest2@hotmail.be (MessageId: <7e17ec04-b2b3-a590-f56f-989528cae5bc@monapp.com>)
+[Nest] 12356  - 21/06/2025 22:48:36     LOG [MailService] 🔗 Aperçu Ethereal: https://ethereal.email/message/aFcZzhUEKDDG0sY2aFcapNmj0lJfmPkPAAAAApMIlph8lQVp.KVdshC1OxA
+[Nest] 12356  - 21/06/2025 22:48:36     LOG [SecurityService] Lien de 
+réinitialisation envoyé à jurytest2@hotmail.be
+[Nest] 12356  - 21/06/2025 22:48:36     LOG [ApiInterceptor] path /api/security/forgot-password
+
    */
   async resetPassword(token: string, newPassword: string): Promise<void> {
     const credential = await this.repository.findOne({ where: { resetToken: token } });

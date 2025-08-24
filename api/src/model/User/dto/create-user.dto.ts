@@ -1,7 +1,11 @@
-import { IsEmail, IsString, IsOptional, IsEnum, IsNotEmpty } from 'class-validator';
+import { IsEmail, IsString, IsOptional, IsEnum, IsNotEmpty, Matches } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { UserRole } from '../entities/user-role.enum';
 
+/**
+ * DTO pour la création d'un utilisateur (inscription ou ajout par un admin)
+ * Contient les champs obligatoires et optionnels pour un nouveau membre
+ */
 export class CreateUserDto {
   @IsNotEmpty()
   @IsString()
@@ -29,6 +33,10 @@ export class CreateUserDto {
 
   @IsOptional()
   @IsString()
+  // Validation stricte : numéro belge (0492390824 ou +32492390824)
+  @Matches(/^(0[1-9][0-9]{8}|(\+32)[1-9][0-9]{8})$/, {
+    message: 'Le numéro de téléphone doit être belge (ex: 0492390824 ou +32492390824)'
+  })
   @ApiProperty({ required: false })
   telephone?: string;
 

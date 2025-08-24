@@ -38,10 +38,8 @@ export class AccountController {
   @ApiResponse({ status: 200, description: 'Return the account', type: AccountResponseDto })
   @Get(':id')
   async findOne(@Param('id') id: string) {
-    console.log('FindOne endpoint called - controller method with id:', id);
     try {
       const result = await this.accountService.findOne(id);
-      console.log('FindOne result:', result);
       return result;
     } catch (error) {
       console.error('Error in controller findOne:', error);
