@@ -133,7 +133,7 @@ export class PaymentService {
           }
         ],
         mode: 'payment' as Stripe.Checkout.Session.Mode,
-        success_url: `${successBaseUrl}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+        success_url: `${successBaseUrl}/payment-success?session_id={CHECKOUT_SESSION_ID}&event_id=${eventId}&event_title=${encodeURIComponent(event.title)}`,
         cancel_url: `${successBaseUrl}/`,
         customer_email: user.email,
         expires_at: Math.floor(Date.now() / 1000) + 1800 // Session expire dans 30 minutes
@@ -225,11 +225,11 @@ export class PaymentService {
       const flutterUrl = `http://localhost:${flutterPort}`;
       console.log('[Stripe] URL Flutter finale:', flutterUrl);
       
-      // En production, utiliser l'URL de production
+      // Pour mobile, utiliser une URL de deep linking vers l'écran de succès
       const isProduction = process.env.NODE_ENV === 'production';
       const successBaseUrl = isProduction 
         ? this.configService.get('FRONTEND_URL') || this.configService.get('FLUTTER_WEB_URL') || 'https://your-domain.com'
-        : flutterUrl;
+        : 'kiwiclub://payment-success'; // Deep link pour mobile
       
       // Vérifier si Flutter est accessible
       try {
