@@ -133,7 +133,7 @@ export class PaymentService {
           }
         ],
         mode: 'payment' as Stripe.Checkout.Session.Mode,
-        success_url: `${successBaseUrl}/payment-success?session_id={CHECKOUT_SESSION_ID}&event_id=${eventId}&event_title=${encodeURIComponent(event.title)}`,
+        success_url: `${successBaseUrl}/payment-success?session_id={CHECKOUT_SESSION_ID}&event_id=${event.id}&event_title=${encodeURIComponent(event.title)}`,
         cancel_url: `${successBaseUrl}/`,
         customer_email: user.email,
         expires_at: Math.floor(Date.now() / 1000) + 1800 // Session expire dans 30 minutes
