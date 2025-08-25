@@ -133,7 +133,7 @@ export class PaymentService {
           }
         ],
         mode: 'payment' as Stripe.Checkout.Session.Mode,
-        success_url: `${successBaseUrl}/payment-success?session_id={CHECKOUT_SESSION_ID}&event_id=${event.id}&event_title=${encodeURIComponent(event.title)}`,
+        success_url: `${successBaseUrl}?session_id={CHECKOUT_SESSION_ID}&event_id=${event.id}&event_title=${encodeURIComponent(event.title)}`,
         cancel_url: `${successBaseUrl}/`,
         customer_email: user.email,
         expires_at: Math.floor(Date.now() / 1000) + 1800 // Session expire dans 30 minutes
@@ -227,9 +227,20 @@ export class PaymentService {
       
       // Pour mobile, utiliser une URL de deep linking vers l'écran de succès
       const isProduction = process.env.NODE_ENV === 'production';
-      const successBaseUrl = isProduction 
-        ? this.configService.get('FRONTEND_URL') || this.configService.get('FLUTTER_WEB_URL') || 'https://your-domain.com'
-        : 'kiwiclub://payment-success'; // Deep link pour mobile
+      
+      // Forcer l'utilisation du deep link mobile pour les paiements
+      let successBaseUrl = 'kiwiclub://payment-success';
+      
+      // En production, vérifier si on a une URL spécifique configurée
+      if (isProduction) {
+        const configUrl = this.configService.get('FRONTEND_URL') || this.configService.get('FLUTTER_WEB_URL');
+        if (configUrl && configUrl.startsWith('kiwiclub://')) {
+          successBaseUrl = configUrl;
+        }
+        // Sinon, garder le deep link mobile par défaut
+      }
+      
+      console.log('[Stripe] Deep link mobile configuré:', successBaseUrl);
       
       // Vérifier si Flutter est accessible
       try {
