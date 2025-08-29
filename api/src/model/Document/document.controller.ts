@@ -195,7 +195,8 @@ export class DocumentController {
           description: `Facture pour l'événement ${event.title}`,
           file_url: './uploads/invoices/invoice-07ce347e-9603-4bc3-be7e-39a395e34233.pdf', // Utiliser une facture existante
           type: DocumentType.INVOICE,
-          uploader: { id: user.userId }
+          uploader: { id: user.userId },
+          event: { id: eventId } // 🔧 LIER LA FACTURE À L'ÉVÉNEMENT
         });
 
         await this.documentRepository.save(testInvoice);
