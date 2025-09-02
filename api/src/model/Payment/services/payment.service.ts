@@ -144,7 +144,7 @@ export class PaymentService {
         eventPrice: event.price,
         unitAmount: Math.round(event.price * 100),
         customerEmail: user.email,
-        successUrl: `${successBaseUrl}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+        successUrl: `${successBaseUrl}?session_id={CHECKOUT_SESSION_ID}&event_id=${event.id}&event_title=${encodeURIComponent(event.title)}`,
         cancelUrl: `${successBaseUrl}/`
       });
       

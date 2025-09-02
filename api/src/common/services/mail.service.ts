@@ -55,16 +55,19 @@ export class MailService {
         this.logger.log('✅ Transporter SendGrid initialisé pour la production');
       } else {
         // Configuration Mailtrap pour le développement
+        const mailtrapUser = 'e3a08b3d942033';
+        const mailtrapPass = '65677b6900c8ad';
+        
         this.transporter = nodemailer.createTransport({
           host: 'sandbox.smtp.mailtrap.io',
           port: 587,
           secure: false,
           auth: {
-            user: 'e3a08b3d942033',
-            pass: '65677b6900c8ad',
+            user: mailtrapUser,
+            pass: mailtrapPass,
           },
         });
-        this.logger.log('✅ Transporter Mailtrap initialisé pour le développement');
+        this.logger.log(`✅ Transporter Mailtrap initialisé pour le développement (user: ${mailtrapUser})`);
       }
     } catch (error) {
       this.logger.error('❌ Erreur lors de l\'initialisation du transporter:', error);

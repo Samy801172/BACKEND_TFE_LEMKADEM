@@ -57,4 +57,35 @@ export class MailTestController {
       `https://mailtrap.io/inboxes/${inboxId}/settings`
     ];
   }
+
+  @Get('test-config')
+  @ApiOperation({ summary: 'Teste la configuration Mailtrap' })
+  async testMailConfig() {
+    try {
+      const isProduction = process.env.NODE_ENV === 'production';
+      const mailtrapUser = process.env.MAILTRAP_USER || 'e3a08b3d942033';
+      const mailtrapPass = process.env.MAILTRAP_PASS || '65677b6900c8ad';
+      
+      return {
+        success: true,
+        config: {
+          environment: process.env.NODE_ENV || 'development',
+          isProduction,
+          mailtrap: {
+            user: mailtrapUser,
+            pass: mailtrapPass ? '***' : 'NOT_SET',
+            host: 'sandbox.smtp.mailtrap.io',
+            port: 587
+          },
+          sendgrid: {
+            apiKey: process.env.SENDGRID_API_KEY ? 'SET' : 'NOT_SET',
+            fromEmail: process.env.SENDGRID_FROM_EMAIL || 'NOT_SET'
+          }
+        },
+        message: isProduction ? 'Configuration SendGrid' : 'Configuration Mailtrap'
+      };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  }
 } 
