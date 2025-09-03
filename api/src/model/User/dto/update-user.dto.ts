@@ -1,6 +1,6 @@
 import { PartialType, OmitType } from '@nestjs/mapped-types';
 import { CreateUserDto } from './create-user.dto';
-import { Matches, IsOptional, IsString, MinLength } from 'class-validator';
+import { Matches, IsOptional, IsString, MinLength, ValidateIf } from 'class-validator';
 
 /**
  * DTO pour la mise à jour d'un utilisateur (tous les champs sont optionnels)
@@ -10,6 +10,7 @@ export class UpdateUserDto extends PartialType(OmitType(CreateUserDto, ['passwor
   @IsOptional()
   @IsString()
   @MinLength(6, { message: 'Le mot de passe doit contenir au moins 6 caractères' })
+  @ValidateIf((o) => o.password && o.password.length > 0)
   password?: string;
 
   // Validation stricte : numéro belge (0492390824 ou +32492390824)
