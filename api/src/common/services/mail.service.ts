@@ -73,7 +73,7 @@ export class MailService {
           this.logger.log(`✅ Transporter Mailtrap initialisé pour le développement (user: ${mailtrapUser})`);
         } else {
           // Fallback: Transporter de test sans envoi réel
-          this.transporter = nodemailer.createTransporter({
+          this.transporter = nodemailer.createTransport({
             streamTransport: true,
             newline: 'unix',
             buffer: true
@@ -82,7 +82,7 @@ export class MailService {
         }
       } else {
         // Fallback: Transporter de test
-        this.transporter = nodemailer.createTransporter({
+        this.transporter = nodemailer.createTransport({
           streamTransport: true,
           newline: 'unix',
           buffer: true
@@ -92,7 +92,7 @@ export class MailService {
     } catch (error) {
       this.logger.error('❌ Erreur lors de l\'initialisation du transporter:', error);
       // Fallback: Créer un transporter de test pour éviter de casser l'application
-      this.transporter = nodemailer.createTransporter({
+      this.transporter = nodemailer.createTransport({
         streamTransport: true,
         newline: 'unix',
         buffer: true
