@@ -241,4 +241,116 @@ export class EventController {
       result: true 
     };
   }
+
+  /**
+   * Ajoute un événement à l'agenda de l'utilisateur
+   */
+  @Post(':id/add-to-agenda')
+  @UseGuards(JwtAuthGuard)
+  async addToAgenda(@Param('id') eventId: string, @Request() req) {
+    try {
+      const userId = req.user.id;
+      const participation = await this.eventService.addToAgenda(eventId, userId);
+      
+      return {
+        code: 'api.common.success',
+        data: {
+          participation: {
+            id: participation.id,
+            status: participation.status,
+            added_to_agenda_at: participation.added_to_agenda_at
+          }
+        },
+        result: true
+      };
+    } catch (error) {
+      this.logger.error(`Erreur lors de l'ajout à l'agenda:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Retire un événement de l'agenda de l'utilisateur
+   */
+  @Delete(':id/remove-from-agenda')
+  @UseGuards(JwtAuthGuard)
+  async removeFromAgenda(@Param('id') eventId: string, @Request() req) {
+    try {
+      const userId = req.user.id;
+      const participation = await this.eventService.removeFromAgenda(eventId, userId);
+      
+      return {
+        code: 'api.common.success',
+        data: {
+          participation: {
+            id: participation.id,
+            status: participation.status,
+            added_to_agenda_at: participation.added_to_agenda_at
+          }
+        },
+        result: true
+      };
+    } catch (error) {
+      this.logger.error(`Erreur lors du retrait de l'agenda:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Vérifie si un événement est dans l'agenda de l'utilisateur
+   */
+  @Get(':id/agenda-status')
+  @UseGuards(JwtAuthGuard)
+  async getAgendaStatus(@Param('id') eventId: string, @Request() req) {
+    try {
+      const userId = req.user.id;
+      const isInAgenda = await this.eventService.isInAgenda(eventId, userId);
+      
+      return {
+        code: 'api.common.success',
+        data: {
+          is_in_agenda: isInAgenda
+        },
+        result: true
+      };
+    } catch (error) {
+      this.logger.error(`Erreur lors de la vérification de l'agenda:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Traite un paiement avec protection contre les doublons
+   */
+  @Post(':id/process-payment')
+  @UseGuards(JwtAuthGuard)
+  async processPayment(
+    @Param('id') eventId: string, 
+    @Request() req,
+    @Body() body: { payment_intent_id: string }
+  ) {
+    try {
+      const userId = req.user.id;
+      const { payment_intent_id } = body;
+      
+      const participation = await this.eventService.processPayment(eventId, userId, payment_intent_id);
+      
+      return {
+        code: 'api.common.success',
+        data: {
+          participation: {
+            id: participation.id,
+            payment_status: participation.payment_status,
+            payment_intent_id: participation.payment_intent_id,
+            last_payment_attempt_at: participation.last_payment_attempt_at,
+            payment_attempts_count: participation.payment_attempts_count
+          }
+        },
+        result: true
+      };
+    } catch (error) {
+      this.logger.error(`Erreur lors du traitement du paiement:`, error);
+      throw error;
+    }
+  }
 } 

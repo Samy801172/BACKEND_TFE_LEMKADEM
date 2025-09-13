@@ -151,12 +151,16 @@ export class DocumentController {
       const user = req.user;
       const { eventId } = body;
       
-      this.logger.log(`Demande de facture par l'utilisateur ${user.userId} pour l'événement ${eventId}`);
+      this.logger.log(`🔍 DEBUG: Demande de facture par l'utilisateur ${user.userId} pour l'événement ${eventId}`);
+      this.logger.log(`🔍 DEBUG: Body reçu: ${JSON.stringify(body)}`);
+      this.logger.log(`🔍 DEBUG: User info: ${JSON.stringify({ userId: user.userId, email: user.email })}`);
 
       // Vérifier si l'événement existe
       const event = await this.eventRepository.findOne({
         where: { id: eventId }
       });
+
+      this.logger.log(`🔍 DEBUG: Événement trouvé: ${event ? 'OUI' : 'NON'} - ${event?.title || 'N/A'}`);
 
       if (!event) {
         this.logger.error(`Événement ${eventId} non trouvé`);
@@ -170,6 +174,11 @@ export class DocumentController {
           participant: { id: user.userId }
         }
       });
+
+      this.logger.log(`🔍 DEBUG: Participation trouvée: ${participation ? 'OUI' : 'NON'}`);
+      if (participation) {
+        this.logger.log(`🔍 DEBUG: Statut participation: ${participation.status} - Paiement: ${participation.payment_status}`);
+      }
 
       if (!participation) {
         this.logger.error(`L'utilisateur ${user.userId} n'a pas participé à l'événement ${eventId}`);
@@ -185,26 +194,42 @@ export class DocumentController {
         order: { id: 'DESC' }
       });
 
-      // Si aucune facture n'est trouvée, créer une facture de test pour cet utilisateur
+      // Si aucune facture n'est trouvée, créer une facture spécifique à l'événement
       if (!invoice || !invoice.file_url || !fs.existsSync(path.resolve(invoice.file_url))) {
-        this.logger.log(`Aucune facture trouvée pour l'utilisateur ${user.userId}, création d'une facture de test`);
+        this.logger.log(`🔍 DEBUG: Aucune facture trouvée pour l'utilisateur ${user.userId}, création d'une facture spécifique à l'événement`);
         
-        // Créer une facture de test
-        const testInvoice = this.documentRepository.create({
+        // Générer un nom de fichier unique pour cette facture
+        const invoiceId = require('crypto').randomUUID();
+        const fileName = `invoice-${invoiceId}.pdf`;
+        const filePath = path.join('./uploads/invoices', fileName);
+        
+        // Créer le dossier s'il n'existe pas
+        const invoiceDir = path.dirname(filePath);
+        if (!fs.existsSync(invoiceDir)) {
+          fs.mkdirSync(invoiceDir, { recursive: true });
+        }
+        
+        // Générer une facture PDF simple
+        await this.generateSimpleInvoicePDF(event, user, participation, filePath);
+        
+        // Créer l'entrée dans la base de données
+        const newInvoice = this.documentRepository.create({
           title: `Facture - ${event.title}`,
           description: `Facture pour l'événement ${event.title}`,
-          file_url: './uploads/invoices/invoice-07ce347e-9603-4bc3-be7e-39a395e34233.pdf', // Utiliser une facture existante
+          file_url: filePath,
           type: DocumentType.INVOICE,
           uploader: { id: user.userId },
-          event: { id: eventId } // 🔧 LIER LA FACTURE À L'ÉVÉNEMENT
+          event: { id: eventId }
         });
 
-        await this.documentRepository.save(testInvoice);
+        await this.documentRepository.save(newInvoice);
         
         // Utiliser la facture créée
         invoice = await this.documentRepository.findOne({
-          where: { id: testInvoice.id }
+          where: { id: newInvoice.id }
         });
+
+        this.logger.log(`🔍 DEBUG: Facture créée avec succès: ${invoice?.id} - ${filePath}`);
 
         if (!invoice || !fs.existsSync(path.resolve(invoice.file_url))) {
           this.logger.error(`Impossible de créer ou trouver une facture pour l'utilisateur ${user.userId}`);
@@ -229,6 +254,52 @@ export class DocumentController {
       };
     } catch (error) {
       this.logger.error(`Erreur lors de l'envoi de la facture: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Génère une facture PDF simple
+   */
+  private async generateSimpleInvoicePDF(event: any, user: any, participation: any, filePath: string): Promise<void> {
+    try {
+      const PDFDocument = require('pdfkit');
+      const doc = new PDFDocument();
+      const writeStream = fs.createWriteStream(filePath);
+      doc.pipe(writeStream);
+
+      // En-tête
+      doc.fontSize(20).text('FACTURE', { align: 'center' });
+      doc.moveDown();
+
+      // Informations de l'événement
+      doc.fontSize(12).text(`Événement: ${event.title || 'N/A'}`);
+      doc.text(`Date: ${event.date ? new Date(event.date).toLocaleDateString('fr-FR') : 'N/A'}`);
+      doc.text(`Lieu: ${event.location || 'N/A'}`);
+      doc.moveDown();
+
+      // Informations du client
+      doc.text(`Client: ${user.prenom || 'N/A'} ${user.nom || 'N/A'}`);
+      doc.text(`Email: ${user.email || 'N/A'}`);
+      doc.moveDown();
+
+      // Détails du paiement
+      doc.text(`Montant: ${event.price || 0}€`);
+      doc.text(`Statut: ${participation.paymentStatus || 'PAID'}`);
+      doc.text(`Date de paiement: ${participation.paymentDate ? new Date(participation.paymentDate).toLocaleDateString('fr-FR') : new Date().toLocaleDateString('fr-FR')}`);
+      doc.moveDown();
+
+      // Pied de page
+      doc.fontSize(10).text('Merci de votre confiance!', { align: 'center' });
+
+      doc.end();
+
+      return new Promise((resolve, reject) => {
+        writeStream.on('finish', resolve);
+        writeStream.on('error', reject);
+      });
+    } catch (error) {
+      this.logger.error(`Erreur lors de la génération de la facture PDF: ${error.message}`);
       throw error;
     }
   }

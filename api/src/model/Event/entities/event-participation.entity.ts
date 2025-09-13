@@ -7,7 +7,8 @@ export enum ParticipationStatus {
   APPROVED = 'APPROVED',
   CONFIRMED = 'CONFIRMED',
   REJECTED = 'REJECTED',
-  CANCELLED = 'CANCELLED'
+  CANCELLED = 'CANCELLED',
+  ADDED_TO_AGENDA = 'ADDED_TO_AGENDA'
 }
 
 export enum PaymentStatus {
@@ -56,4 +57,13 @@ export class EventParticipation {
 
   @CreateDateColumn()
   createdAt: Date;
+
+  @Column({ nullable: true })
+  added_to_agenda_at?: Date;
+
+  @Column({ nullable: true })
+  last_payment_attempt_at?: Date;
+
+  @Column({ default: 0 })
+  payment_attempts_count: number;
 } 

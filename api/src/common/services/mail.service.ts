@@ -56,8 +56,8 @@ export class MailService {
         this.logger.log('✅ Transporter SendGrid initialisé pour la production');
       } else if (!isProduction) {
         // Configuration Mailtrap pour le développement
-        const mailtrapUser = 'e3a08b3d942033';
-        const mailtrapPass = '65677b6900c8ad';
+        const mailtrapUser = '2a81d91e209a7a';
+        const mailtrapPass = '26efc0e208621a';
         
         // Vérifier si les credentials Mailtrap sont disponibles
         if (mailtrapUser && mailtrapPass) {

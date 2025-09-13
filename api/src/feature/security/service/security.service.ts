@@ -205,7 +205,7 @@ export class SecurityService {
         entreprise: payload.entreprise,
         type_user: isAdmin ? UserRole.ADMIN : UserRole.MEMBER,
         // Ajout automatique de la photo par défaut si aucune photo n'est fournie
-        photo: 'default.jpg', // <-- photo par défaut
+        photo: '/api/files/profiles/default.jpg', // <-- photo par défaut avec chemin complet
       });
 
       try {

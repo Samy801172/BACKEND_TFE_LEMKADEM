@@ -536,4 +536,169 @@ export class EventService {
       throw new Error('Erreur lors de la confirmation de présence');
     }
   }
+
+  /**
+   * Ajoute un événement à l'agenda de l'utilisateur
+   * @param eventId - ID de l'événement
+   * @param userId - ID de l'utilisateur
+   * @returns Participation mise à jour
+   */
+  async addToAgenda(eventId: string, userId: string): Promise<EventParticipation> {
+    try {
+      console.log('[EventService] Ajout à l\'agenda - eventId:', eventId, 'userId:', userId);
+
+      // Vérifier si l'utilisateur est déjà inscrit à l'événement
+      const existingParticipation = await this.participationRepository.findOne({
+        where: { eventId, participantId: userId }
+      });
+
+      if (!existingParticipation) {
+        throw new NotFoundException('Vous n\'êtes pas inscrit à cet événement');
+      }
+
+      // Vérifier si déjà ajouté à l'agenda
+      if (existingParticipation.status === ParticipationStatus.ADDED_TO_AGENDA) {
+        throw new ConflictException('Cet événement est déjà dans votre agenda');
+      }
+
+      // Mettre à jour le statut et la date d'ajout
+      existingParticipation.status = ParticipationStatus.ADDED_TO_AGENDA;
+      existingParticipation.added_to_agenda_at = new Date();
+
+      const updatedParticipation = await this.participationRepository.save(existingParticipation);
+      
+      console.log('[EventService] Événement ajouté à l\'agenda avec succès');
+      return updatedParticipation;
+    } catch (error) {
+      console.error('[EventService] Erreur lors de l\'ajout à l\'agenda:', error);
+      
+      if (error instanceof NotFoundException || 
+          error instanceof ConflictException) {
+        throw error;
+      }
+      
+      throw new Error('Erreur lors de l\'ajout à l\'agenda');
+    }
+  }
+
+  /**
+   * Retire un événement de l'agenda de l'utilisateur
+   * @param eventId - ID de l'événement
+   * @param userId - ID de l'utilisateur
+   * @returns Participation mise à jour
+   */
+  async removeFromAgenda(eventId: string, userId: string): Promise<EventParticipation> {
+    try {
+      console.log('[EventService] Retrait de l\'agenda - eventId:', eventId, 'userId:', userId);
+
+      const participation = await this.participationRepository.findOne({
+        where: { eventId, participantId: userId }
+      });
+
+      if (!participation) {
+        throw new NotFoundException('Participation non trouvée');
+      }
+
+      if (participation.status !== ParticipationStatus.ADDED_TO_AGENDA) {
+        throw new ConflictException('Cet événement n\'est pas dans votre agenda');
+      }
+
+      // Remettre le statut à CONFIRMED
+      participation.status = ParticipationStatus.CONFIRMED;
+      participation.added_to_agenda_at = null;
+
+      const updatedParticipation = await this.participationRepository.save(participation);
+      
+      console.log('[EventService] Événement retiré de l\'agenda avec succès');
+      return updatedParticipation;
+    } catch (error) {
+      console.error('[EventService] Erreur lors du retrait de l\'agenda:', error);
+      
+      if (error instanceof NotFoundException || 
+          error instanceof ConflictException) {
+        throw error;
+      }
+      
+      throw new Error('Erreur lors du retrait de l\'agenda');
+    }
+  }
+
+  /**
+   * Traite un paiement avec protection contre les doublons
+   * @param eventId - ID de l'événement
+   * @param userId - ID de l'utilisateur
+   * @param paymentIntentId - ID du paiement Stripe
+   * @returns Participation mise à jour
+   */
+  async processPayment(eventId: string, userId: string, paymentIntentId: string): Promise<EventParticipation> {
+    try {
+      console.log('[EventService] Traitement du paiement - eventId:', eventId, 'userId:', userId);
+
+      const participation = await this.participationRepository.findOne({
+        where: { eventId, participantId: userId }
+      });
+
+      if (!participation) {
+        throw new NotFoundException('Participation non trouvée');
+      }
+
+      // Vérifier si déjà payé
+      if (participation.payment_status === PaymentStatus.PAID) {
+        throw new ConflictException('Cet événement a déjà été payé');
+      }
+
+      // Vérifier les tentatives de paiement récentes (protection contre le spam)
+      const now = new Date();
+      const lastAttempt = participation.last_payment_attempt_at;
+      const timeSinceLastAttempt = lastAttempt ? now.getTime() - lastAttempt.getTime() : Infinity;
+      const minTimeBetweenAttempts = 30000; // 30 secondes
+
+      if (timeSinceLastAttempt < minTimeBetweenAttempts) {
+        throw new ConflictException('Trop de tentatives de paiement. Veuillez attendre avant de réessayer.');
+      }
+
+      // Mettre à jour les informations de paiement
+      participation.payment_intent_id = paymentIntentId;
+      participation.payment_status = PaymentStatus.PAID;
+      participation.last_payment_attempt_at = now;
+      participation.payment_attempts_count += 1;
+
+      const updatedParticipation = await this.participationRepository.save(participation);
+      
+      console.log('[EventService] Paiement traité avec succès');
+      return updatedParticipation;
+    } catch (error) {
+      console.error('[EventService] Erreur lors du traitement du paiement:', error);
+      
+      if (error instanceof NotFoundException || 
+          error instanceof ConflictException) {
+        throw error;
+      }
+      
+      throw new Error('Erreur lors du traitement du paiement');
+    }
+  }
+
+  /**
+   * Vérifie si un événement est dans l'agenda de l'utilisateur
+   * @param eventId - ID de l'événement
+   * @param userId - ID de l'utilisateur
+   * @returns Boolean indiquant si l'événement est dans l'agenda
+   */
+  async isInAgenda(eventId: string, userId: string): Promise<boolean> {
+    try {
+      const participation = await this.participationRepository.findOne({
+        where: { 
+          eventId, 
+          participantId: userId,
+          status: ParticipationStatus.ADDED_TO_AGENDA
+        }
+      });
+
+      return !!participation;
+    } catch (error) {
+      console.error('[EventService] Erreur lors de la vérification de l\'agenda:', error);
+      return false;
+    }
+  }
 } 
