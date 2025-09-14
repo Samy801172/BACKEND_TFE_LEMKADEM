@@ -237,13 +237,13 @@ export class DocumentController {
         }
       }
 
-      // Envoyer la facture par email
+      // Envoyer la facture par email (sans pièce jointe pour test)
       await this.mailService.sendMail(
         user.email,
         `Facture - ${event.title}`,
-        `Bonjour,\n\nVeuillez trouver votre facture pour l'événement "${event.title}" en pièce jointe.\n\nCordialement,\nL'équipe Kiwi Club`,
-        undefined,
-        [{ filename: `facture_${event.title.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`, path: invoice.file_url }]
+        `Bonjour,\n\nVotre facture pour l'événement "${event.title}" a été générée avec succès.\n\nCordialement,\nL'équipe Kiwi Club`,
+        undefined
+        // [{ filename: `facture_${event.title.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`, path: invoice.file_url }]
       );
 
       this.logger.log(`Facture envoyée par email à ${user.email} pour l'événement ${eventId}`);
