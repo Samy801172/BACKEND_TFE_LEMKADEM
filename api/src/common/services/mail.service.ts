@@ -55,21 +55,22 @@ export class MailService {
         });
         this.logger.log('✅ Transporter SendGrid initialisé pour la production');
       } else if (!isProduction) {
-        // Configuration Gmail pour le développement (envoi d'emails réels)
-        const gmailUser = process.env.GMAIL_USER;
-        const gmailPass = process.env.GMAIL_APP_PASSWORD;
+        // Configuration Mailtrap pour le développement
+        const mailtrapUser = '09b04970de09d8';
+        const mailtrapPass = 'ecf22b0f9ee9a0';
         
-        if (gmailUser && gmailPass) {
+        // Vérifier si les credentials Mailtrap sont disponibles
+        if (mailtrapUser && mailtrapPass) {
           this.transporter = nodemailer.createTransport({
-            host: 'smtp.gmail.com',
+            host: 'sandbox.smtp.mailtrap.io',
             port: 587,
             secure: false,
             auth: {
-              user: gmailUser,
-              pass: gmailPass,
+              user: mailtrapUser,
+              pass: mailtrapPass,
             },
           });
-          this.logger.log(`✅ Transporter Gmail initialisé pour le développement (user: ${gmailUser})`);
+          this.logger.log(`✅ Transporter Mailtrap initialisé pour le développement (user: ${mailtrapUser})`);
         } else {
           // Fallback: Transporter de test sans envoi réel
           this.transporter = nodemailer.createTransport({
