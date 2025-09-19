@@ -56,22 +56,30 @@ export class MailService {
         this.logger.log('✅ Transporter SendGrid initialisé pour la production');
       } else if (!isProduction) {
         // Configuration Mailtrap pour le développement
-        const mailtrapUser = process.env.MAILTRAP_USER || '09b04970de09d8';
-        const mailtrapPass = process.env.MAILTRAP_PASS || 'ecf22b0f9ee9a0';
+        const mailtrapUser = '09b04970de09d8';
+        const mailtrapPass = 'ecf22b0f9ee9a0';
         
-        // FORCER l'utilisation de Mailtrap en développement
-        this.logger.log(`🔧 Configuration Mailtrap - User: ${mailtrapUser}, Pass: ${mailtrapPass ? '***' : 'undefined'}`);
-        
-        this.transporter = nodemailer.createTransport({
-          host: 'sandbox.smtp.mailtrap.io',
-          port: 587,
-          secure: false,
-          auth: {
-            user: mailtrapUser,
-            pass: mailtrapPass,
-          },
-        });
-        this.logger.log(`✅ Transporter Mailtrap FORCÉ pour le développement (user: ${mailtrapUser})`);
+        // Vérifier si les credentials Mailtrap sont disponibles
+        if (mailtrapUser && mailtrapPass) {
+          this.transporter = nodemailer.createTransport({
+            host: 'sandbox.smtp.mailtrap.io',
+            port: 587,
+            secure: false,
+            auth: {
+              user: mailtrapUser,
+              pass: mailtrapPass,
+            },
+          });
+          this.logger.log(`✅ Transporter Mailtrap initialisé pour le développement (user: ${mailtrapUser})`);
+        } else {
+          // Fallback: Transporter de test sans envoi réel
+          this.transporter = nodemailer.createTransport({
+            streamTransport: true,
+            newline: 'unix',
+            buffer: true
+          });
+          this.logger.warn('⚠️ Transporter de test initialisé (aucun email ne sera envoyé réellement)');
+        }
       } else {
         // Fallback: Transporter de test
         this.transporter = nodemailer.createTransport({
