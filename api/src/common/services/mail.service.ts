@@ -56,8 +56,8 @@ export class MailService {
         this.logger.log('✅ Transporter SendGrid initialisé pour la production');
       } else if (!isProduction) {
         // Configuration Mailtrap pour le développement
-        const mailtrapUser = process.env.MAILTRAP_USER || '09b04970de09d8';
-        const mailtrapPass = process.env.MAILTRAP_PASS || 'ecf22b0f9ee9a0';
+        const mailtrapUser = process.env.MAILTRAP_USER || 'e3a08b3d942033';
+        const mailtrapPass = process.env.MAILTRAP_PASS || '65677b6900c8ad';
         
         // Vérifier si les credentials Mailtrap sont disponibles
         if (mailtrapUser && mailtrapPass) {
@@ -103,15 +103,17 @@ export class MailService {
 
   async sendMail(to: string, subject: string, text: string, html?: string, attachments?: any[]) {
     try {
-      this.logger.log(`Tentative d'envoi d'email à ${to}`);
+      this.logger.log(`📧 Tentative d'envoi d'email à ${to}`);
+      this.logger.log(`📧 Sujet: ${subject}`);
+      this.logger.log(`📧 Pièces jointes: ${attachments ? attachments.length : 0}`);
       
       if (!this.transporter) {
-        this.logger.error('Transporter non initialisé');
+        this.logger.error('❌ Transporter non initialisé');
         throw new Error('Service d\'envoi d\'emails non initialisé');
       }
 
       const mailOptions = {
-        from: 'no-reply@monapp.com',
+        from: 'no-reply@kiwiclub.be',
         to,
         subject,
         text,
@@ -119,13 +121,15 @@ export class MailService {
         attachments
       };
 
+      this.logger.log(`📧 Options email:`, JSON.stringify(mailOptions, null, 2));
       const info = await this.transporter.sendMail(mailOptions);
       
       // Vérifier si c'est un transporter de test
       const isTestTransporter = this.transporter.options && this.transporter.options.streamTransport;
       
       if (isTestTransporter) {
-        this.logger.log(`✅ Email simulé pour ${to} (Mode test - aucun email réellement envoyé)`);
+        this.logger.log(`⚠️ EMAIL SIMULÉ pour ${to} (Mode test - aucun email réellement envoyé)`);
+        this.logger.log(`⚠️ Les emails ne sont pas envoyés car le système est en mode test`);
         // Créer un messageId fictif pour les logs
         info.messageId = `test-${Date.now()}@test.local`;
       } else {
