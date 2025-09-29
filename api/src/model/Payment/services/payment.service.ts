@@ -541,12 +541,12 @@ export class PaymentService {
       const invoicePath = `uploads/invoices/invoice-${payment.id}.pdf`;
       await this.generateInvoicePDF(payment, invoicePath);
 
-      // 6. Envoi d'email de confirmation
+      // 6. Envoi d'email de confirmation avec facture PDF
       try {
         await this.mailService.sendMail(
           payment.user.email,
           'Paiement confirmé - Inscription à l\'événement',
-          `Votre paiement pour l'événement "${payment.event.title}" a été confirmé avec succès.`,
+          `Votre paiement pour l'événement "${payment.event.title}" a été confirmé avec succès.\n\nVeuillez trouver votre facture en pièce jointe.\n\nCordialement,\nL'équipe Kiwi Club`,
           `
             <h2>Paiement confirmé !</h2>
             <p>Bonjour,</p>
@@ -558,11 +558,16 @@ export class PaymentService {
               <li><strong>Lieu :</strong> ${payment.event.location}</li>
               <li><strong>Montant :</strong> ${payment.amount}€</li>
             </ul>
-            <p>Vous recevrez bientôt un email avec les détails de l'événement.</p>
+            <p>Veuillez trouver votre facture en pièce jointe.</p>
             <p>Cordialement,<br>L'équipe Kiwi Club</p>
-          `
+          `,
+          [{ 
+            filename: `facture_${payment.event.title.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`, 
+            path: invoicePath,
+            contentType: 'application/pdf'
+          }]
         );
-        console.log('[Stripe] Email de confirmation envoyé à:', payment.user.email);
+        console.log('[Stripe] Email de confirmation avec facture envoyé à:', payment.user.email);
       } catch (emailError) {
         console.error('[Stripe] Erreur lors de l\'envoi de l\'email de confirmation:', emailError);
       }
