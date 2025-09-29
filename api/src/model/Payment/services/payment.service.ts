@@ -1026,35 +1026,116 @@ export class PaymentService {
       .execute();
   }
 
-  // Ajout de la méthode utilitaire pour générer la facture PDF
+  // Ajout de la méthode utilitaire pour générer la facture PDF complète
   private async generateInvoicePDF(payment: Payment, filePath: string) {
     try {
-      const doc = new PDFDocument();
+      const doc = new PDFDocument({ margin: 50 });
       const writeStream = fs.createWriteStream(filePath);
       doc.pipe(writeStream);
 
-      // En-tête
-      doc.fontSize(20).text('Facture', { align: 'center' });
-      doc.moveDown();
+      // Couleurs
+      const primaryColor = '#2E7D32'; // Vert Kiwi Club
+      const secondaryColor = '#666666';
+      const lightGray = '#F5F5F5';
 
-      // Informations de l'événement
-      doc.fontSize(12).text(`Événement: ${payment.event?.title || 'N/A'}`);
-      doc.text(`Date: ${payment.event?.date ? payment.event.date.toLocaleDateString('fr-FR') : 'N/A'}`);
-      doc.moveDown();
+      // En-tête avec logo et informations
+      doc.rect(0, 0, 595, 100).fill(lightGray);
+      doc.fillColor(primaryColor);
+      doc.fontSize(24).text('KIWI CLUB', 50, 20, { align: 'left' });
+      doc.fillColor(secondaryColor);
+      doc.fontSize(12).text('Réseau de Networking Professionnel', 50, 45);
+      doc.fontSize(10).text('www.kiwiclub.be', 50, 60);
+      
+      // Numéro de facture et date
+      doc.fillColor('black');
+      doc.fontSize(16).text('FACTURE', 400, 20, { align: 'right' });
+      doc.fontSize(10).text(`N° ${payment.reference}`, 400, 40, { align: 'right' });
+      doc.text(`Date: ${new Date().toLocaleDateString('fr-FR')}`, 400, 55, { align: 'right' });
+
+      // Ligne de séparation
+      doc.moveTo(50, 100).lineTo(545, 100).stroke(primaryColor, 2);
 
       // Informations du client
-      doc.text(`Client: ${payment.user?.prenom || 'N/A'} ${payment.user?.nom || 'N/A'}`);
-      doc.text(`Email: ${payment.user?.email || 'N/A'}`);
-      doc.moveDown();
+      doc.moveDown(2);
+      doc.fillColor(primaryColor);
+      doc.fontSize(14).text('FACTURÉ À:', 50, 120);
+      doc.fillColor('black');
+      doc.fontSize(12).text(`${payment.user?.prenom || ''} ${payment.user?.nom || ''}`, 50, 140);
+      doc.text(`${payment.user?.email || 'N/A'}`, 50, 155);
+      if (payment.user?.telephone) {
+        doc.text(`Tél: ${payment.user.telephone}`, 50, 170);
+      }
+      if (payment.user?.entreprise) {
+        doc.text(`Entreprise: ${payment.user.entreprise}`, 50, 185);
+      }
 
-      // Détails du paiement
-      doc.text(`Montant: ${payment.amount}€`);
-      doc.text(`Référence: ${payment.reference}`);
-      doc.text(`Date de paiement: ${payment.completedAt ? payment.completedAt.toLocaleDateString('fr-FR') : new Date().toLocaleDateString('fr-FR')}`);
-      doc.moveDown();
+      // Détails de l'événement
+      doc.moveDown(2);
+      doc.fillColor(primaryColor);
+      doc.fontSize(14).text('DÉTAILS DE L\'ÉVÉNEMENT:', 50, 220);
+      doc.fillColor('black');
+      doc.fontSize(12).text(`${payment.event?.title || 'N/A'}`, 50, 240);
+      doc.text(`Date: ${payment.event?.date ? payment.event.date.toLocaleDateString('fr-FR') : 'N/A'}`, 50, 255);
+      doc.text(`Lieu: ${payment.event?.location || 'N/A'}`, 50, 270);
+
+      // Tableau des services
+      doc.moveDown(2);
+      const tableTop = 320;
+      const itemHeight = 30;
+      const col1 = 50;
+      const col2 = 300;
+      const col3 = 400;
+      const col4 = 500;
+
+      // En-tête du tableau
+      doc.rect(col1, tableTop, 495, itemHeight).fill(primaryColor);
+      doc.fillColor('white');
+      doc.fontSize(10).text('DESCRIPTION', col1 + 10, tableTop + 10);
+      doc.text('QUANTITÉ', col2 + 10, tableTop + 10);
+      doc.text('PRIX UNIT.', col3 + 10, tableTop + 10);
+      doc.text('TOTAL', col4 + 10, tableTop + 10);
+
+      // Ligne de service
+      doc.fillColor('black');
+      doc.rect(col1, tableTop + itemHeight, 495, itemHeight).stroke();
+      doc.fontSize(10).text(`Participation à l'événement "${payment.event?.title}"`, col1 + 10, tableTop + itemHeight + 10);
+      doc.text('1', col2 + 20, tableTop + itemHeight + 10);
+      doc.text(`${payment.amount}€`, col3 + 10, tableTop + itemHeight + 10);
+      doc.text(`${payment.amount}€`, col4 + 10, tableTop + itemHeight + 10);
+
+      // Sous-total et TVA
+      const subtotalY = tableTop + (itemHeight * 2) + 20;
+      doc.fontSize(12).text(`Sous-total: ${payment.amount}€`, col3, subtotalY);
+      doc.text(`TVA (21%): ${(payment.amount * 0.21).toFixed(2)}€`, col3, subtotalY + 20);
+      
+      // Total
+      const totalY = subtotalY + 50;
+      doc.rect(col3, totalY - 10, 145, 30).fill(lightGray);
+      doc.fillColor(primaryColor);
+      doc.fontSize(14).text(`TOTAL: ${(payment.amount * 1.21).toFixed(2)}€`, col3 + 10, totalY);
+
+      // Informations de paiement
+      doc.fillColor('black');
+      doc.moveDown(3);
+      doc.fontSize(12).text('INFORMATIONS DE PAIEMENT:', 50, totalY + 50);
+      doc.fontSize(10).text(`Statut: ${payment.status}`, 50, totalY + 70);
+      doc.text(`Date de paiement: ${payment.completedAt ? payment.completedAt.toLocaleDateString('fr-FR') : new Date().toLocaleDateString('fr-FR')}`, 50, totalY + 85);
+      doc.text(`Méthode: Stripe`, 50, totalY + 100);
+      doc.text(`Référence: ${payment.reference}`, 50, totalY + 115);
+
+      // Conditions et notes
+      doc.moveDown(2);
+      doc.fontSize(10).text('CONDITIONS:', 50, totalY + 150);
+      doc.text('• Paiement effectué via Stripe', 50, totalY + 170);
+      doc.text('• Aucun remboursement après le début de l\'événement', 50, totalY + 185);
+      doc.text('• En cas d\'annulation, contactez-nous 48h avant l\'événement', 50, totalY + 200);
 
       // Pied de page
-      doc.fontSize(10).text('Merci de votre confiance!', { align: 'center' });
+      const footerY = 750;
+      doc.rect(0, footerY, 595, 50).fill(lightGray);
+      doc.fillColor(secondaryColor);
+      doc.fontSize(8).text('Merci de votre confiance et à bientôt chez Kiwi Club!', 50, footerY + 15, { align: 'center' });
+      doc.text('Pour toute question: contact@kiwiclub.be', 50, footerY + 30, { align: 'center' });
 
       doc.end();
 
