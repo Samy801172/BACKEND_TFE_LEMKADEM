@@ -99,11 +99,8 @@ export class MessageController {
     return this.messageService.findUnread(req.user.userId);
   }
 
-  @Get(':id')
-  @ApiResponse({ status: 200, description: 'Return a message by id' })
-  findOne(@Param('id') id: string) {
-    return this.messageService.findOne(id);
-  }
+  // ROUTE DÉPLACÉE : Cette route doit être à la fin pour éviter les conflits de routage
+  // Les routes spécifiques (comme 'conversation/:contactId') doivent être déclarées avant
 
   @Post(':id/read')
   @ApiResponse({ status: 200, description: 'Mark message as read' })
@@ -132,5 +129,13 @@ export class MessageController {
   @ApiResponse({ status: 200, description: 'Tous les messages marqués comme lus' })
   async markAllAsRead(@Req() req, @Param('contactId') contactId: string) {
     return this.messageService.markAllAsRead(req.user.userId, contactId);
+  }
+
+  // ROUTE DÉPLACÉE : Cette route doit être à la fin pour éviter les conflits de routage
+  // Les routes spécifiques (comme 'conversation/:contactId') doivent être déclarées avant
+  @Get(':id')
+  @ApiResponse({ status: 200, description: 'Return a message by id' })
+  findOne(@Param('id') id: string) {
+    return this.messageService.findOne(id);
   }
 } 
