@@ -72,32 +72,44 @@ export class MailService {
           });
           this.logger.log(`✅ Transporter Mailtrap initialisé pour le développement (user: ${mailtrapUser})`);
         } else {
-          // Fallback: Transporter de test sans envoi réel
+          // Fallback: Utiliser les credentials Mailtrap par défaut
           this.transporter = nodemailer.createTransport({
-            streamTransport: true,
-            newline: 'unix',
-            buffer: true
+            host: 'sandbox.smtp.mailtrap.io',
+            port: 587,
+            secure: false,
+            auth: {
+              user: '09b04970de09d8',
+              pass: 'ecf22b0f9ee9a0',
+            },
           });
-          this.logger.warn('⚠️ Transporter de test initialisé (aucun email ne sera envoyé réellement)');
+          this.logger.log('✅ Transporter Mailtrap initialisé avec credentials par défaut');
         }
       } else {
-        // Fallback: Transporter de test
+        // Fallback: Utiliser les credentials Mailtrap par défaut
         this.transporter = nodemailer.createTransport({
-          streamTransport: true,
-          newline: 'unix',
-          buffer: true
+          host: 'sandbox.smtp.mailtrap.io',
+          port: 587,
+          secure: false,
+          auth: {
+            user: '09b04970de09d8',
+            pass: 'ecf22b0f9ee9a0',
+          },
         });
-        this.logger.warn('⚠️ Configuration email manquante, transporter de test initialisé (aucun email ne sera envoyé)');
+        this.logger.log('✅ Transporter Mailtrap initialisé avec credentials par défaut (fallback)');
       }
     } catch (error) {
       this.logger.error('❌ Erreur lors de l\'initialisation du transporter:', error);
-      // Fallback: Créer un transporter de test pour éviter de casser l'application
+      // Fallback: Utiliser les credentials Mailtrap par défaut
       this.transporter = nodemailer.createTransport({
-        streamTransport: true,
-        newline: 'unix',
-        buffer: true
+        host: 'sandbox.smtp.mailtrap.io',
+        port: 587,
+        secure: false,
+        auth: {
+          user: '09b04970de09d8',
+          pass: 'ecf22b0f9ee9a0',
+        },
       });
-      this.logger.warn('⚠️ Transporter de test créé en mode fallback');
+      this.logger.log('✅ Transporter Mailtrap initialisé avec credentials par défaut (fallback error)');
     }
   }
 
