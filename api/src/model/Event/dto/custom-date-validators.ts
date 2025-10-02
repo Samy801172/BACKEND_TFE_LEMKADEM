@@ -3,6 +3,11 @@ import { ValidatorConstraint, ValidatorConstraintInterface, ValidationArguments 
 @ValidatorConstraint({ name: 'isFutureDate', async: false })
 export class IsFutureDateConstraint implements ValidatorConstraintInterface {
   validate(date: Date, args: ValidationArguments) {
+    // Vérifier que la date est définie et valide
+    if (!date || !(date instanceof Date) || isNaN(date.getTime())) {
+      return false;
+    }
+    
     return date > new Date();
   }
   defaultMessage(args: ValidationArguments) {
@@ -13,6 +18,11 @@ export class IsFutureDateConstraint implements ValidatorConstraintInterface {
 @ValidatorConstraint({ name: 'isNotTooFarInFuture', async: false })
 export class IsNotTooFarInFutureConstraint implements ValidatorConstraintInterface {
   validate(date: Date, args: ValidationArguments) {
+    // Vérifier que la date est définie et valide
+    if (!date || !(date instanceof Date) || isNaN(date.getTime())) {
+      return false;
+    }
+    
     const now = new Date();
     const twoYearsFromNow = new Date(now.getFullYear() + 2, now.getMonth(), now.getDate());
     return date <= twoYearsFromNow;
@@ -25,6 +35,11 @@ export class IsNotTooFarInFutureConstraint implements ValidatorConstraintInterfa
 @ValidatorConstraint({ name: 'isBusinessHours', async: false })
 export class IsBusinessHoursConstraint implements ValidatorConstraintInterface {
   validate(date: Date, args: ValidationArguments) {
+    // Vérifier que la date est définie et valide
+    if (!date || !(date instanceof Date) || isNaN(date.getTime())) {
+      return false;
+    }
+    
     const hours = date.getHours();
     return hours >= 8 && hours <= 20;
   }
