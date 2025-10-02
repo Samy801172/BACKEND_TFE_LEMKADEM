@@ -71,6 +71,24 @@ export class UserService {
     if (!user) {
       throw new NotFoundException(`User with ID ${id} not found`);
     }
+    
+    // Vérifier si la photo existe, sinon utiliser l'image par défaut
+    let photoUrl = user.photo;
+    if (photoUrl) {
+      // Vérifier si le fichier existe sur le serveur
+      const fs = require('fs');
+      const path = require('path');
+      const photoPath = photoUrl.replace('/api/files/profiles/', './uploads/profiles/');
+      
+      if (!fs.existsSync(photoPath)) {
+        console.log(`⚠️ Photo manquante pour l'utilisateur ${id}: ${photoUrl}`);
+        console.log(`📁 Chemin vérifié: ${photoPath}`);
+        photoUrl = '/api/files/profiles/default.jpg';
+      }
+    } else {
+      photoUrl = '/api/files/profiles/default.jpg';
+    }
+    
     return {
       id: user.id,
       nom: user.nom,
@@ -81,7 +99,7 @@ export class UserService {
       telephone: user.telephone,
       secteur: user.secteur,
       bio: user.bio,
-      photo: user.photo,
+      photo: photoUrl,
       linkedin: user.linkedin,
       isActive: user.isActive,
       created_at: user.created_at,
@@ -93,6 +111,42 @@ export class UserService {
     return await this.userRepository.findOne({ 
       where: { email } 
     });
+  }
+
+  /**
+   * Méthode pour corriger les URLs d'images manquantes
+   * Met à jour automatiquement les utilisateurs avec des photos inexistantes
+   */
+  async fixMissingPhotos(): Promise<{ fixed: number; total: number }> {
+    const fs = require('fs');
+    const path = require('path');
+    
+    // Récupérer tous les utilisateurs avec des photos
+    const users = await this.userRepository.find({
+      where: { 
+        photo: { $ne: null } as any,
+        isActive: true 
+      }
+    });
+    
+    let fixedCount = 0;
+    
+    for (const user of users) {
+      if (user.photo && !user.photo.includes('default.jpg')) {
+        const photoPath = user.photo.replace('/api/files/profiles/', './uploads/profiles/');
+        
+        if (!fs.existsSync(photoPath)) {
+          console.log(`🔧 Correction photo manquante pour ${user.email}: ${user.photo}`);
+          await this.userRepository.update(user.id, {
+            photo: '/api/files/profiles/default.jpg'
+          });
+          fixedCount++;
+        }
+      }
+    }
+    
+    console.log(`✅ Correction terminée: ${fixedCount}/${users.length} photos corrigées`);
+    return { fixed: fixedCount, total: users.length };
   }
 
   async put(id: string, updateUserDto: UpdateUserDto): Promise<User> {

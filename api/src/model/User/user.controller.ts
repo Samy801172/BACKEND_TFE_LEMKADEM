@@ -206,4 +206,11 @@ export class UserController {
       throw error;
     }
   }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @Post('fix-missing-photos')
+  async fixMissingPhotos() {
+    return await this.userService.fixMissingPhotos();
+  }
 }
