@@ -37,6 +37,9 @@ export class EventService {
 
   // Méthode pour créer un événement
   async create(createEventDto: CreateEventDto, organizerId: string): Promise<Event> {
+    console.log('[EventService] 🚀 Début de création d\'événement:', createEventDto.title);
+    console.log('[EventService] 👤 Organisateur ID:', organizerId);
+    
     // Vérifier si un événement existe déjà à cette date et ce lieu
     const existingEvent = await this.eventRepository.findOne({
       where: {
@@ -47,16 +50,24 @@ export class EventService {
     });
 
     if (existingEvent) {
+      console.log('[EventService] ❌ Événement existant trouvé:', existingEvent.title);
       throw new ForbiddenException('Un événement existe déjà à cette date et ce lieu');
     }
+
+    console.log('[EventService] ✅ Aucun événement existant trouvé, création en cours...');
 
     const event = this.eventRepository.create({
       ...createEventDto,
       organizer: { id: organizerId }
     });
 
+    console.log('[EventService] 💾 Sauvegarde de l\'événement en base...');
+    const savedEvent = await this.eventRepository.save(event);
+    console.log('[EventService] ✅ Événement sauvegardé avec ID:', savedEvent.id);
+
     // Récupérer tous les membres
     const members = await this.userService.findAll();
+    console.log('[EventService] 📧 Envoi d\'emails à', members.length, 'membres...');
 
     // Envoyer un email à chaque membre
     for (const member of members) {
@@ -67,13 +78,14 @@ export class EventService {
           `Un nouvel événement a été créé : ${createEventDto.title}`,
           `<p>Un nouvel événement a été créé : <strong>${createEventDto.title}</strong></p>`
         );
+        console.log('[EventService] ✅ Email envoyé à:', member.email);
       } catch (error) {
-        // DEBUG: Erreur lors de l'envoi de l'email à un membre (à activer uniquement en développement)
-        // console.error(`Erreur lors de l'envoi de l'email à ${member.email}:`, error);
+        console.error(`[EventService] ❌ Erreur lors de l'envoi de l'email à ${member.email}:`, error);
       }
     }
 
-    return await this.eventRepository.save(event);
+    console.log('[EventService] 🎉 Création d\'événement terminée:', savedEvent.title);
+    return savedEvent;
   }
 
   // Méthode pour trouver un événement par ID

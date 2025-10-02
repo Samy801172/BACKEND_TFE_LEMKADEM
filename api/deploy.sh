@@ -51,3 +51,4 @@ echo "- MAILTRAP_PASS=ecf22b0f9ee9a0"
 
 echo ""
 echo "✅ Script de déploiement terminé!"
+

@@ -97,8 +97,8 @@ const bootstrap = async () => {
     // Expose le dossier uploads en statique
     app.use('/api/files', express.static(join(__dirname, '..', 'uploads')));
     
-    // Expose le dossier public/profiles pour les images de profil par défaut
-    app.use('/api/files/profiles', express.static(join(__dirname, '..', 'public', 'profiles')));
+    // Expose le dossier uploads/profiles pour les images de profil
+    app.use('/api/files/profiles', express.static(join(__dirname, '..', 'uploads', 'profiles')));
 
     app.useGlobalInterceptors(new ApiInterceptor());
     app.useGlobalFilters(new HttpExceptionFilter());
