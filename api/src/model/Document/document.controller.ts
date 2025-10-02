@@ -146,7 +146,7 @@ export class DocumentController {
    */
   @Post('request-invoice')
   @UseGuards(JwtAuthGuard)
-  async requestInvoice(@Req() req, @Body() body: { eventId: string }) {
+  async requestInvoice(@Req() req, @Body() body: { eventId: string, eventTitle?: string }) {
     try {
       const user = req.user;
       const { eventId } = body;
@@ -238,13 +238,19 @@ export class DocumentController {
       }
 
       // Envoyer la facture par email
-      await this.mailService.sendMail(
-        user.email,
-        `Facture - ${event.title}`,
-        `Bonjour,\n\nVeuillez trouver votre facture pour l'événement "${event.title}" en pièce jointe.\n\nCordialement,\nL'équipe Kiwi Club`,
-        undefined,
-        [{ filename: `facture_${event.title.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`, path: invoice.file_url }]
-      );
+      try {
+        await this.mailService.sendMail(
+          user.email,
+          `Facture - ${event.title}`,
+          `Bonjour,\n\nVeuillez trouver votre facture pour l'événement "${event.title}" en pièce jointe.\n\nCordialement,\nL'équipe Kiwi Club`,
+          undefined,
+          [{ filename: `facture_${event.title.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`, path: invoice.file_url }]
+        );
+        this.logger.log(`✅ Facture envoyée par email à ${user.email}`);
+      } catch (emailError) {
+        this.logger.error(`❌ Erreur envoi email: ${emailError.message}`);
+        // Ne pas faire échouer la requête si l'email échoue
+      }
 
       this.logger.log(`Facture envoyée par email à ${user.email} pour l'événement ${eventId}`);
       return { 
