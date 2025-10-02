@@ -27,7 +27,14 @@ const bootstrap = async () => {
         console.log('CORS origin:', origin); // Log l'origine reçue
         const allowedOrigins = [
           'https://samy801172.github.io',
-          'http://localhost:4200'
+          'http://localhost:4200',
+          'http://localhost:56700', // Flutter web par défaut
+          'http://localhost:56969', // Flutter web alternatif
+          'http://localhost:59013', // Flutter web actuel
+          'http://localhost:60263', // Flutter web actuel
+          'http://localhost:61013', // Flutter web actuel
+          'http://localhost:8080',  // Port alternatif
+          'http://localhost:3000'   // Port alternatif
         ];
         // Autorise tous les ports localhost pour Flutter web
         if (
@@ -35,8 +42,10 @@ const bootstrap = async () => {
           allowedOrigins.includes(origin) ||
           /^http:\/\/localhost:\d+$/.test(origin)
         ) {
+          console.log('✅ CORS autorisé pour:', origin);
           callback(null, true);
         } else {
+          console.log('❌ CORS refusé pour:', origin);
           callback(new Error('Not allowed by CORS'));
         }
       },
