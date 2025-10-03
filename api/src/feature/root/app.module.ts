@@ -14,6 +14,8 @@ import { AccountModule } from '../../model/Account/account.module';
 import { MailModule } from '@common/services/mail.module';
 import { ContactModule } from '@model/Contact/contact.module';
 import { DynamicCorsMiddleware } from '../../common/middleware/dynamic-cors.middleware';
+import { AppController } from './app.controller';
+import { AppService } from './app.service';
 
 @Module({
   imports: [
@@ -31,8 +33,8 @@ import { DynamicCorsMiddleware } from '../../common/middleware/dynamic-cors.midd
     MailModule,
     ContactModule
   ],
-  controllers: [],
-  providers: []
+  controllers: [AppController],
+  providers: [AppService]
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
