@@ -1,3 +1,4 @@
+# Render configuration for Kiwi Club Backend
 services:
   - type: web
     name: kiwi-club-backend
