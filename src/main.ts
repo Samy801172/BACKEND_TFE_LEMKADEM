@@ -94,32 +94,29 @@ const bootstrap = async () => {
       prefix: '/uploads/',
     });
 
-    // S'assurer que les dossiers existent
+    // S'assurer que les dossiers uploads existent
     const fs = require('fs');
-    // Les photos sont dans public/profiles/ (pas uploads/)
-    // process.cwd() = /opt/render/project/src/api
-    // Donc public/profiles = process.cwd()/public/profiles
-    const publicDir = join(process.cwd(), 'public');
-    const profilesDir = join(process.cwd(), 'public', 'profiles');
+    // Corriger le chemin pour Render (Root Directory: src/api)
+    const uploadsDir = join(process.cwd(), '..', 'uploads');
+    const profilesDir = join(process.cwd(), '..', 'uploads', 'profiles');
     
-    if (!fs.existsSync(publicDir)) {
-      fs.mkdirSync(publicDir, { recursive: true });
-      console.log('📁 Dossier public créé:', publicDir);
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+      console.log('📁 Dossier uploads créé:', uploadsDir);
     }
     
     if (!fs.existsSync(profilesDir)) {
       fs.mkdirSync(profilesDir, { recursive: true });
-      console.log('📁 Dossier public/profiles créé:', profilesDir);
+      console.log('📁 Dossier uploads/profiles créé:', profilesDir);
     }
 
-    console.log('📁 Chemin public utilisé:', publicDir);
+    console.log('📁 Chemin uploads utilisé:', uploadsDir);
     console.log('📁 Chemin profiles utilisé:', profilesDir);
-    console.log('📁 Process.cwd():', process.cwd());
 
-    // Expose le dossier public en statique
-    app.use('/api/files', express.static(publicDir));
+    // Expose le dossier uploads en statique
+    app.use('/api/files', express.static(uploadsDir));
     
-    // Expose le dossier public/profiles pour les images de profil
+    // Expose le dossier uploads/profiles pour les images de profil
     app.use('/api/files/profiles', express.static(profilesDir));
 
     app.useGlobalInterceptors(new ApiInterceptor());

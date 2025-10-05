@@ -169,7 +169,7 @@ export class UserController {
   @Post('profile/photo')
   @UseInterceptors(FileInterceptor('photo', {
     storage: diskStorage({
-      destination: './public/profiles',
+      destination: './uploads/profiles',
       filename: (req: any, file, cb) => {
         const ext = path.extname(file.originalname);
         const userId = req.user?.userId || req.user?.id || 'unknown';
@@ -210,7 +210,7 @@ export class UserController {
       
       // Supprimer l'ancienne photo si elle existe
       if (currentUser?.photo && currentUser.photo !== '/api/files/profiles/default.jpg') {
-        const oldPhotoPath = currentUser.photo.replace('/api/files/profiles/', './public/profiles/');
+        const oldPhotoPath = currentUser.photo.replace('/api/files/profiles/', './uploads/profiles/');
         const fs = require('fs');
         if (fs.existsSync(oldPhotoPath)) {
           fs.unlinkSync(oldPhotoPath);

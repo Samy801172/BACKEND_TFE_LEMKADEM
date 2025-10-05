@@ -78,7 +78,7 @@ export class UserService {
       // Vérifier si le fichier existe sur le serveur
       const fs = require('fs');
       const path = require('path');
-      const photoPath = photoUrl.replace('/api/files/profiles/', './uploads/profiles/');
+      const photoPath = photoUrl.replace('/api/files/profiles/', './public/profiles/');
       
       if (!fs.existsSync(photoPath)) {
         console.log(`⚠️ Photo manquante pour l'utilisateur ${id}: ${photoUrl}`);
