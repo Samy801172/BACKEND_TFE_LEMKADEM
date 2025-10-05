@@ -4,10 +4,10 @@ services:
     name: kiwi-club-backend
     env: node
     plan: free
-    buildCommand: cd .. && npm ci && npm run build
-    startCommand: cd .. && npm run start:prod
+    buildCommand: npm ci && npm run build
+    startCommand: npm run start:prod
     healthCheckPath: /api
-    rootDir: src
+    rootDir: .
     region: oregon
     envVars:
       - key: NODE_ENV

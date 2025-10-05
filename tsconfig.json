@@ -9,14 +9,14 @@
     "target": "es2017",
     "sourceMap": true,
     "outDir": "./dist",
-    "rootDir": "./src/api",
+    "rootDir": "./src",
     "baseUrl": "./",
     "incremental": true,
     "skipLibCheck": true,
     "paths": {
-      "@model/*": ["src/api/model/*"],
-      "@feature/*": ["src/api/feature/*"],
-      "@common/*": ["src/api/common/*"]
+      "@model/*": ["src/model/*"],
+      "@feature/*": ["src/feature/*"],
+      "@common/*": ["src/common/*"]
     }
   },
   "watchAssert": true,
