@@ -1,0 +1,6 @@
+export declare enum EventType {
+    NETWORKING = "NETWORKING",
+    WORKSHOP = "WORKSHOP",
+    CONFERENCE = "CONFERENCE",
+    FORMATION = "FORMATION"
+}

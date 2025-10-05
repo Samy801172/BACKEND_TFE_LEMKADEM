@@ -1,0 +1,44 @@
+import { Repository } from 'typeorm';
+import { TokenService } from './token.service';
+import { Credential, SignInPayload, SignupPayload, Token, RefreshTokenPayload } from "../data";
+import { User } from '@model/User/entities/user.entity';
+import { MailService } from '@common/services/mail.service';
+export declare class SecurityService {
+    private readonly repository;
+    private readonly userRepository;
+    private readonly tokenService;
+    private readonly mailService;
+    private readonly logger;
+    constructor(repository: Repository<Credential>, userRepository: Repository<User>, tokenService: TokenService, mailService: MailService);
+    private loginAttempts;
+    private readonly MAX_ATTEMPTS;
+    private readonly LOCK_TIME;
+    private checkLoginAttempts;
+    detail(id: string): Promise<Credential>;
+    signIn(payload: SignInPayload, isAdmin: boolean): Promise<Token | null>;
+    signup(payload: SignupPayload, isAdmin?: boolean): Promise<Token>;
+    refresh(payload: RefreshTokenPayload): Promise<Token | null>;
+    delete(id: string): Promise<void>;
+    private findBySocialLogin;
+    private findByCredentials;
+    private debugUserSearch;
+    private validateAndGenerateTokens;
+    private userExists;
+    private createUser;
+    promoteToOrganizer(userId: string): Promise<void>;
+    fixAdminRole(userId: string): Promise<void>;
+    checkUserRole(userId: string): Promise<void>;
+    promoteToMember(userId: string): Promise<void>;
+    promoteToAdmin(userId: string): Promise<void>;
+    remove(id: string): Promise<void>;
+    restore(id: string): Promise<void>;
+    findByEmail(email: string): Promise<User>;
+    createFromGoogle(data: {
+        email: string;
+        displayName: string;
+        googleId: string;
+    }): Promise<User>;
+    generateToken(userData: any): Promise<Token>;
+    requestPasswordReset(email: string): Promise<void>;
+    resetPassword(token: string, newPassword: string): Promise<void>;
+}

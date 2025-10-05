@@ -1,0 +1,10 @@
+{
+  "name": "kiwi-club-backend-api",
+  "version": "1.0.0",
+  "description": "Kiwi Club Backend API - Redirect to root",
+  "scripts": {
+    "start": "cd ../.. && npm run start:prod",
+    "build": "cd ../.. && npm run build",
+    "install": "cd ../.. && npm install"
+  }
+}

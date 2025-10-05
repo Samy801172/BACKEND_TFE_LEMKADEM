@@ -1,36 +1,40 @@
 "use strict";
-var __extends = (this && this.__extends) || (function () {
-    var extendStatics = function (d, b) {
-        extendStatics = Object.setPrototypeOf ||
-            ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
-            function (d, b) { for (var p in b) if (Object.prototype.hasOwnProperty.call(b, p)) d[p] = b[p]; };
-        return extendStatics(d, b);
-    };
-    return function (d, b) {
-        if (typeof b !== "function" && b !== null)
-            throw new TypeError("Class extends value " + String(b) + " is not a constructor or null");
-        extendStatics(d, b);
-        function __() { this.constructor = d; }
-        d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-    };
-})();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ApiException = void 0;
-var common_1 = require("@nestjs/common");
-var ApiCodeResponse = /** @class */ (function () {
-    function ApiCodeResponse() {
-    }
-    return ApiCodeResponse;
-}());
-var ApiException = /** @class */ (function (_super) {
-    __extends(ApiException, _super);
-    function ApiException(code, status) {
-        return _super.call(this, {
+exports.camelToSnake = exports.validationErrorToApiCodeResponse = exports.ValidationException = exports.ApiException = void 0;
+const common_1 = require("@nestjs/common");
+const enum_1 = require("../enum");
+const lodash_1 = require("lodash");
+class ApiException extends common_1.HttpException {
+    constructor(code, status) {
+        const apiResponse = {
             code: code,
             data: null,
             result: false
-        }, status) || this;
+        };
+        super(apiResponse, status);
     }
-    return ApiException;
-}(common_1.HttpException));
+}
 exports.ApiException = ApiException;
+class ValidationException extends common_1.HttpException {
+    constructor(errors) {
+        const apiResponse = {
+            code: enum_1.ApiCodeResponse.PAYLOAD_IS_NOT_VALID,
+            data: errors.map((e) => (0, exports.validationErrorToApiCodeResponse)(e)).flat(),
+            result: false
+        };
+        super(apiResponse, 499);
+    }
+}
+exports.ValidationException = ValidationException;
+const validationErrorToApiCodeResponse = (error) => {
+    return Object.keys(error.constraints).map((k) => {
+        const code = enum_1.ApiCodeResponse[`${(0, exports.camelToSnake)(error.property)}_${(0, exports.camelToSnake)(k)}`];
+        return (0, lodash_1.isNil)(code) ? enum_1.ApiCodeResponse.PAYLOAD_PARAM_IS_MISSING : code;
+    });
+};
+exports.validationErrorToApiCodeResponse = validationErrorToApiCodeResponse;
+const camelToSnake = (str) => {
+    return str.replace(/([A-Z])/g, " $1").split(' ').join('_').toUpperCase();
+};
+exports.camelToSnake = camelToSnake;
+//# sourceMappingURL=api.exception.js.map
