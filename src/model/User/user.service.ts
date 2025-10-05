@@ -169,12 +169,17 @@ export class UserService {
     Object.assign(user, safeUpdateData);
     await this.userRepository.save(user);
 
-    // After saving the updated user, send a confirmation email
-    await this.mailService.sendMail(
-      user.email,
-      'Mise à jour du profil',
-      'Votre profil a été mis à jour avec succès.'
-    );
+    // After saving the updated user, send a confirmation email (désactivé temporairement pour éviter les timeouts)
+    try {
+      await this.mailService.sendMail(
+        user.email,
+        'Mise à jour du profil',
+        'Votre profil a été mis à jour avec succès.'
+      );
+    } catch (emailError) {
+      console.error('❌ Erreur envoi email confirmation profil (non bloquant):', emailError.message);
+      // Ne pas faire échouer l'upload de photo si l'email échoue
+    }
     // DEBUG: Mail de confirmation de mise à jour envoyé à l'utilisateur (à activer uniquement en développement)
     // console.log('[UserService] Mail de confirmation de mise à jour envoyé à:', user.email);
 
