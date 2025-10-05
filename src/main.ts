@@ -101,19 +101,22 @@ const bootstrap = async () => {
     
     if (!fs.existsSync(uploadsDir)) {
       fs.mkdirSync(uploadsDir, { recursive: true });
-      console.log('📁 Dossier uploads créé');
+      console.log('📁 Dossier uploads créé:', uploadsDir);
     }
     
     if (!fs.existsSync(profilesDir)) {
       fs.mkdirSync(profilesDir, { recursive: true });
-      console.log('📁 Dossier uploads/profiles créé');
+      console.log('📁 Dossier uploads/profiles créé:', profilesDir);
     }
 
+    console.log('📁 Chemin uploads utilisé:', uploadsDir);
+    console.log('📁 Chemin profiles utilisé:', profilesDir);
+
     // Expose le dossier uploads en statique
-    app.use('/api/files', express.static(join(process.cwd(), 'uploads')));
+    app.use('/api/files', express.static(uploadsDir));
     
     // Expose le dossier uploads/profiles pour les images de profil
-    app.use('/api/files/profiles', express.static(join(process.cwd(), 'uploads', 'profiles')));
+    app.use('/api/files/profiles', express.static(profilesDir));
 
     app.useGlobalInterceptors(new ApiInterceptor());
     app.useGlobalFilters(new HttpExceptionFilter());
