@@ -96,8 +96,9 @@ const bootstrap = async () => {
 
     // S'assurer que les dossiers uploads existent
     const fs = require('fs');
-    const uploadsDir = join(process.cwd(), 'uploads');
-    const profilesDir = join(process.cwd(), 'uploads', 'profiles');
+    // Corriger le chemin pour Render (Root Directory: src/api)
+    const uploadsDir = join(process.cwd(), '..', 'uploads');
+    const profilesDir = join(process.cwd(), '..', 'uploads', 'profiles');
     
     if (!fs.existsSync(uploadsDir)) {
       fs.mkdirSync(uploadsDir, { recursive: true });
