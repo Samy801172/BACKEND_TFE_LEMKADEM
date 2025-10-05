@@ -219,6 +219,8 @@ export class UserController {
       }
 
       // Génère l'URL dynamique avec timestamp pour éviter le cache
+      console.log('📤 File object complet:', file);
+      console.log('📤 File filename:', file.filename);
       const photoUrl = `/api/files/profiles/${file.filename}?t=${Date.now()}`;
       console.log('📤 URL photo générée:', photoUrl);
       
