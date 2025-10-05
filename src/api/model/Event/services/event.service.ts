@@ -10,10 +10,10 @@ import { ParticipationResponseDto } from '../dto/participation-response.dto';
 import { EventWithCalendarDto } from '../dto/event-with-calendar.dto';
 import { PaymentService } from '../../Payment/services/payment.service';
 import { PaymentTransactionStatus } from '../../Payment/entities/payment.entity';
-import { MailService } from 'src/common/services/mail.service';
+import { MailService } from '@common/services/mail.service';
 import { UserService } from '../../User/user.service';
 import { User } from '../../User/entities/user.entity';
-import { NotificationService } from 'src/common/services/notification.service';
+import { NotificationService } from '@common/services/notification.service';
 
 @Injectable()
 export class EventService {
