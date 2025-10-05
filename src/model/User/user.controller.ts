@@ -180,11 +180,36 @@ export class UserController {
   }))
   async uploadPhoto(@UploadedFile() file: any, @Req() req) {
     try {
+      console.log('📤 Upload photo démarré...');
+      console.log('📤 Fichier reçu:', file ? {
+        originalname: file.originalname,
+        filename: file.filename,
+        mimetype: file.mimetype,
+        size: file.size
+      } : 'AUCUN FICHIER');
+      console.log('📤 User ID:', req.user?.userId || req.user?.id);
+
+      // Vérifier que le fichier existe
+      if (!file) {
+        console.error('❌ Aucun fichier reçu');
+        throw new Error('Aucun fichier reçu');
+      }
+
+      // Vérifier que l'utilisateur existe
+      if (!req.user?.userId && !req.user?.id) {
+        console.error('❌ Utilisateur non authentifié');
+        throw new Error('Utilisateur non authentifié');
+      }
+
+      const userId = req.user.userId || req.user.id;
+      console.log('📤 User ID final:', userId);
+
       // Récupérer l'utilisateur actuel pour supprimer l'ancienne photo
-      const currentUser = await this.userService.findOne(req.user.userId);
+      const currentUser = await this.userService.findOne(userId);
+      console.log('📤 Utilisateur trouvé:', currentUser ? 'OUI' : 'NON');
       
       // Supprimer l'ancienne photo si elle existe
-      if (currentUser.photo && currentUser.photo !== '/api/files/profiles/default.jpg') {
+      if (currentUser?.photo && currentUser.photo !== '/api/files/profiles/default.jpg') {
         const oldPhotoPath = currentUser.photo.replace('/api/files/profiles/', './uploads/profiles/');
         const fs = require('fs');
         if (fs.existsSync(oldPhotoPath)) {
@@ -195,14 +220,24 @@ export class UserController {
 
       // Génère l'URL dynamique avec timestamp pour éviter le cache
       const photoUrl = `/api/files/profiles/${file.filename}?t=${Date.now()}`;
+      console.log('📤 URL photo générée:', photoUrl);
       
       // Met à jour le profil utilisateur avec l'URL
-      await this.userService.put(req.user.userId, { photo: photoUrl });
+      await this.userService.put(userId, { photo: photoUrl });
+      console.log('📤 Profil utilisateur mis à jour');
       
-      console.log(`📸 Nouvelle photo uploadée: ${photoUrl}`);
-      return { photo: photoUrl };
+      console.log(`📸 Nouvelle photo uploadée avec succès: ${photoUrl}`);
+      return { 
+        success: true,
+        photo: photoUrl,
+        message: 'Photo uploadée avec succès'
+      };
     } catch (error) {
-      console.error('❌ Erreur lors de l\'upload de photo:', error);
+      console.error('❌ Erreur détaillée lors de l\'upload de photo:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      });
       throw error;
     }
   }

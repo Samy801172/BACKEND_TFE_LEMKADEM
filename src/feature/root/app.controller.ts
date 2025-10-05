@@ -14,9 +14,22 @@ export class AppController {
   }
 
   @ApiOperation({ summary: 'Hello World 2 endpoint' })
-
   @Post('hello2')
   getHello2(): ApiResponse {
     return { result: true, code: ApiCodeResponse.TEST, data: this.appService.getHello() };
+  }
+
+  @ApiOperation({ summary: 'Health check endpoint' })
+  @Get('health')
+  getHealth(): ApiResponse {
+    return { 
+      result: true, 
+      code: ApiCodeResponse.TEST, 
+      data: { 
+        status: 'OK', 
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime()
+      } 
+    };
   }
 }
