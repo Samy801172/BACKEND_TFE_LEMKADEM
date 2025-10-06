@@ -94,8 +94,8 @@ export class MailService {
           port: 587,
           secure: false,
           auth: {
-            user: '2a81d91e209a7a', // Nouveaux credentials
-            pass: '26efc0e208621a', // Nouveaux credentials
+            user: '837aee6518510e', // Nouveaux credentials
+            pass: '0d349a1788b217cd', // Nouveaux credentials
           },
           connectionTimeout: 60000, // 60 secondes
           greetingTimeout: 30000,   // 30 secondes
