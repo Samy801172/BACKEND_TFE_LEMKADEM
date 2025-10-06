@@ -40,10 +40,10 @@ export class IsBusinessHoursConstraint implements ValidatorConstraintInterface {
       return false;
     }
     
-    const hours = date.getHours();
-    return hours >= 8 && hours <= 20;
+    // Permettre les événements 24h/24 (suppression de la contrainte d'heures)
+    return true;
   }
   defaultMessage(args: ValidationArguments) {
-    return 'Les événements doivent être programmés entre 8h et 20h';
+    return 'La date de l\'événement doit être valide';
   }
 } 
