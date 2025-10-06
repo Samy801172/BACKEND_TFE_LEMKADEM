@@ -39,7 +39,7 @@ export class CloudinaryService {
       const uploadOptions = {
         folder: folder,
         public_id: `profile_${Date.now()}`,
-        resource_type: 'auto',
+        resource_type: 'auto' as const,
         transformation: [
           { width: 500, height: 500, crop: 'fill', gravity: 'face' },
           { quality: 'auto' }
