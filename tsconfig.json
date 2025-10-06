@@ -19,6 +19,8 @@
       "@common/*": ["src/common/*"]
     }
   },
+  "include": ["src/**/*"],
+  "exclude": ["test/**/*", "node_modules", "dist"],
   "watchAssert": true,
   "noEmitOnError": true,
   "strictNullChecks": false,
