@@ -12,6 +12,7 @@ export class DynamicCorsMiddleware implements NestMiddleware {
     // Liste des origines autorisées (localhost pour dev, GitHub Pages pour prod)
     const allowedOrigins = [
       'http://localhost:4200', 
+      'http://localhost:55994', // Flutter web actuel
       'http://localhost:56700', // Flutter web par défaut
       'http://localhost:56969', // Flutter web alternatif
       'http://localhost:59013', // Flutter web actuel
@@ -38,8 +39,9 @@ export class DynamicCorsMiddleware implements NestMiddleware {
       
       // Autoriser les méthodes et headers nécessaires
       res.header('Access-Control-Allow-Methods', 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS');
-      res.header('Access-Control-Allow-Headers', 'Content-Type, Accept, Authorization, stripe-signature');
+      res.header('Access-Control-Allow-Headers', 'Content-Type, Accept, Authorization, stripe-signature, X-Requested-With');
       res.header('Access-Control-Allow-Credentials', 'true');
+      res.header('Access-Control-Max-Age', '86400'); // Cache preflight pour 24h
       
       // Répondre immédiatement pour les préflight requests
       return res.sendStatus(204);
