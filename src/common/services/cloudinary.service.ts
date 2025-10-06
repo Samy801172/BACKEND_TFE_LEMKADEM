@@ -4,11 +4,19 @@ import { v2 as cloudinary } from 'cloudinary';
 @Injectable()
 export class CloudinaryService {
   constructor() {
+    // Vérifier si Cloudinary est configuré
+    if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
+      console.warn('⚠️ Cloudinary non configuré - Variables d\'environnement manquantes');
+      return;
+    }
+    
     cloudinary.config({
       cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
       api_key: process.env.CLOUDINARY_API_KEY,
       api_secret: process.env.CLOUDINARY_API_SECRET,
     });
+    
+    console.log('✅ CloudinaryService configuré avec succès');
   }
 
   /**
@@ -17,8 +25,14 @@ export class CloudinaryService {
    * @param folder - Dossier de destination (optionnel)
    * @returns Promise avec l'URL de l'image
    */
-  async uploadImage(file: Express.Multer.File, folder: string = 'kiwi-club'): Promise<string> {
+  async uploadImage(file: any, folder: string = 'kiwi-club'): Promise<string> {
     try {
+      // Vérifier si Cloudinary est configuré
+      if (!process.env.CLOUDINARY_CLOUD_NAME) {
+        console.warn('⚠️ Cloudinary non configuré - Fallback vers stockage local');
+        throw new Error('Cloudinary non configuré');
+      }
+      
       console.log('📤 CloudinaryService: Upload en cours...');
       
       // Convertir le buffer en base64

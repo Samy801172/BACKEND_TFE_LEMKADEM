@@ -210,10 +210,18 @@ export class UserController {
       const currentUser = await this.userService.findOne(userId);
       console.log('📤 Utilisateur trouvé:', currentUser ? 'OUI' : 'NON');
       
-      // Upload vers Cloudinary
-      console.log('📤 Upload vers Cloudinary...');
-      const cloudinaryUrl = await this.cloudinaryService.uploadImage(file, 'kiwi-club/profiles');
-      console.log('📤 URL Cloudinary générée:', cloudinaryUrl);
+      // Upload vers Cloudinary (avec fallback)
+      let photoUrl: string;
+      try {
+        console.log('📤 Upload vers Cloudinary...');
+        photoUrl = await this.cloudinaryService.uploadImage(file, 'kiwi-club/profiles');
+        console.log('📤 URL Cloudinary générée:', photoUrl);
+      } catch (error) {
+        console.log('⚠️ Cloudinary échoué, fallback vers stockage local:', error.message);
+        // Fallback vers le système local
+        photoUrl = `/api/files/profiles/${file.filename}?t=${Date.now()}`;
+        console.log('📤 URL locale générée:', photoUrl);
+      }
 
       // Supprimer l'ancienne photo Cloudinary si elle existe
       if (currentUser?.photo && currentUser.photo.includes('cloudinary.com')) {
@@ -226,15 +234,15 @@ export class UserController {
         }
       }
       
-      // Met à jour le profil utilisateur avec l'URL Cloudinary
-      await this.userService.put(userId, { photo: cloudinaryUrl });
+      // Met à jour le profil utilisateur avec l'URL (Cloudinary ou locale)
+      await this.userService.put(userId, { photo: photoUrl });
       console.log('📤 Profil utilisateur mis à jour');
       
-      console.log(`📸 Nouvelle photo uploadée avec succès: ${cloudinaryUrl}`);
+      console.log(`📸 Nouvelle photo uploadée avec succès: ${photoUrl}`);
       return { 
         success: true,
-        photo: cloudinaryUrl,
-        message: 'Photo uploadée avec succès sur Cloudinary'
+        photo: photoUrl,
+        message: photoUrl.includes('cloudinary.com') ? 'Photo uploadée avec succès sur Cloudinary' : 'Photo uploadée avec succès (stockage local)'
       };
     } catch (error) {
       console.error('❌ Erreur détaillée lors de l\'upload de photo:', {
