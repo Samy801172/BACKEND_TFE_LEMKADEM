@@ -17,7 +17,7 @@ import { SuggestionsService } from './suggestions.service';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Credential } from '@feature/security/data/entity/credential.entity';
-import { CloudinaryService } from '@common/services/cloudinary.service';
+import { CloudinaryService } from '@common/services';
 
 // IMPORTANT :
 // Ce contrôleur n'a PAS de décorateur @Roles ou @UseGuards(RolesGuard) sur la classe.
