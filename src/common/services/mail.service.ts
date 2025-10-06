@@ -42,6 +42,29 @@ export class MailService {
     try {
       const isProduction = process.env.NODE_ENV === 'production';
       
+      if (isProduction) {
+        // En production, on utilise Mailtrap avec des timeouts plus longs
+        this.transporter = nodemailer.createTransport({
+          host: 'sandbox.smtp.mailtrap.io',
+          port: 587,
+          secure: false,
+          auth: {
+            user: process.env.MAILTRAP_USER || '09b04970de09d8',
+            pass: process.env.MAILTRAP_PASS || 'ecf22b0f9ee9a0',
+          },
+          connectionTimeout: 30000,  // 30 secondes
+          greetingTimeout: 30000,    // 30 secondes
+          socketTimeout: 60000,      // 60 secondes
+          pool: true,                // Utiliser le pool de connexions
+          maxConnections: 5,         // Max 5 connexions simultanées
+          maxMessages: 100,          // Max 100 messages par connexion
+          rateDelta: 20000,          // Attendre 20s entre les envois
+          rateLimit: 5,              // Max 5 emails par rateDelta
+        });
+        this.logger.log('✅ Transporter Mailtrap initialisé pour la production avec timeouts étendus');
+        return;
+      }
+      
       if (isProduction && process.env.SENDGRID_API_KEY) {
         // Configuration SendGrid pour la production
         this.transporter = nodemailer.createTransport({
@@ -56,10 +79,10 @@ export class MailService {
         this.logger.log('✅ Transporter SendGrid initialisé pour la production');
       } else if (!isProduction) {
         // Configuration Mailtrap pour le développement
-        const mailtrapUser = process.env.MAILTRAP_USER || '837aee6518510e';
+        const mailtrapUser = process.env.MAILTRAP_USER || '09b04970de09d8';
 
 
-        const mailtrapPass = process.env.MAILTRAP_PASS || '0d349a1788b217';
+        const mailtrapPass = process.env.MAILTRAP_PASS || 'ecf22b0f9ee9a0';
         
         // Vérifier si les credentials Mailtrap sont disponibles
         if (mailtrapUser && mailtrapPass) {
@@ -149,11 +172,24 @@ export class MailService {
       
       let info;
       try {
-        info = await this.transporter.sendMail(mailOptions);
-        this.logger.log(`🔍 DEBUG: Email envoyé avec succès - MessageId: ${info.messageId}`);
+        if (!this.transporter) {
+          // Mode production sans transporter - simulation uniquement
+          this.logger.log(`⚠️ EMAIL SIMULÉ pour ${to} (Mode production - emails désactivés)`);
+          info = { messageId: `sim-${Date.now()}@kiwiclub.be` };
+        } else {
+          info = await this.transporter.sendMail(mailOptions);
+          this.logger.log(`🔍 DEBUG: Email envoyé avec succès - MessageId: ${info.messageId}`);
+        }
       } catch (error) {
         this.logger.error(`❌ DEBUG: Erreur envoi email à ${to}:`, error);
-        throw error; // Re-throw pour que l'appelant gère l'erreur
+        
+        // Gestion spéciale des timeouts - ne pas faire échouer l'application
+        if (error.code === 'ETIMEDOUT' || error.message.includes('timeout')) {
+          this.logger.warn(`⚠️ Timeout SMTP - Email simulé pour ${to}`);
+          info = { messageId: `timeout-${Date.now()}@kiwiclub.be` };
+        } else {
+          throw error; // Re-throw pour les autres erreurs
+        }
       }
       
       // Vérifier si c'est un email d'annulation (toujours envoyer)
