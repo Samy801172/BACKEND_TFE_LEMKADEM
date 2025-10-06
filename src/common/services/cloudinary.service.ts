@@ -35,11 +35,8 @@ export class CloudinaryService {
       
       console.log('📤 CloudinaryService: Upload en cours...');
       
-      // Convertir le buffer en base64
-      const base64String = file.buffer.toString('base64');
-      const dataUri = `data:${file.mimetype};base64,${base64String}`;
-      
-      const result = await cloudinary.uploader.upload(dataUri, {
+      // Utiliser le chemin du fichier pour l'upload
+      const uploadOptions = {
         folder: folder,
         public_id: `profile_${Date.now()}`,
         resource_type: 'auto',
@@ -47,7 +44,11 @@ export class CloudinaryService {
           { width: 500, height: 500, crop: 'fill', gravity: 'face' },
           { quality: 'auto' }
         ]
-      });
+      };
+
+      console.log('📤 CloudinaryService: Upload depuis:', file.path);
+      
+      const result = await cloudinary.uploader.upload(file.path, uploadOptions);
 
       console.log('✅ CloudinaryService: Upload réussi:', result.secure_url);
       return result.secure_url;
