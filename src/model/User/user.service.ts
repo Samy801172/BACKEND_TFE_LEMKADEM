@@ -179,17 +179,9 @@ export class UserService {
     const savedUser = await this.userRepository.save(user);
     console.log('🔄 UserService.put - Utilisateur sauvegardé:', savedUser.photo);
 
-    // After saving the updated user, send a confirmation email (désactivé temporairement pour éviter les timeouts)
-    try {
-      await this.mailService.sendMail(
-        user.email,
-        'Mise à jour du profil',
-        'Votre profil a été mis à jour avec succès.'
-      );
-    } catch (emailError) {
-      console.error('❌ Erreur envoi email confirmation profil (non bloquant):', emailError.message);
-      // Ne pas faire échouer l'upload de photo si l'email échoue
-    }
+    // TEMPORAIREMENT DÉSACTIVÉ : Envoi d'emails automatiques (cause de lenteur)
+    // TODO: Implémenter un système de notifications en arrière-plan
+    console.log('[UserService] ⚠️ Envoi d\'emails désactivé temporairement pour améliorer les performances');
     // DEBUG: Mail de confirmation de mise à jour envoyé à l'utilisateur (à activer uniquement en développement)
     // console.log('[UserService] Mail de confirmation de mise à jour envoyé à:', user.email);
 
