@@ -10,10 +10,11 @@ import { ContactService } from '../Contact/contact.service';
 import { Contact } from '../Contact/entities/contact.entity';
 import { SuggestionsService } from './suggestions.service';
 import { NotificationModule } from '../Notification/notification.module';
+import { CloudinaryService } from '../../common/services/cloudinary.service';
 
 @Module({
   imports: [TypeOrmModule.forFeature([User, Credential, Contact]), MailModule, NotificationModule],
-  providers: [UserService, ContactService, SuggestionsService],
+  providers: [UserService, ContactService, SuggestionsService, CloudinaryService],
   controllers: [UserController],
   exports: [UserService]
 })

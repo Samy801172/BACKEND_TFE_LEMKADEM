@@ -17,6 +17,7 @@ import { SuggestionsService } from './suggestions.service';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Credential } from '@feature/security/data/entity/credential.entity';
+import { CloudinaryService } from '@common/services/cloudinary.service';
 
 // IMPORTANT :
 // Ce contrôleur n'a PAS de décorateur @Roles ou @UseGuards(RolesGuard) sur la classe.
@@ -31,6 +32,7 @@ export class UserController {
     private readonly userService: UserService,
     private readonly contactService: ContactService,
     private readonly suggestionsService: SuggestionsService,
+    private readonly cloudinaryService: CloudinaryService,
     @InjectRepository(Credential)
     private readonly credentialRepository: Repository<Credential>
   ) {}
@@ -208,31 +210,31 @@ export class UserController {
       const currentUser = await this.userService.findOne(userId);
       console.log('📤 Utilisateur trouvé:', currentUser ? 'OUI' : 'NON');
       
-      // Supprimer l'ancienne photo si elle existe
-      if (currentUser?.photo && currentUser.photo !== '/api/files/profiles/default.jpg') {
-        const oldPhotoPath = currentUser.photo.replace('/api/files/profiles/', './uploads/profiles/');
-        const fs = require('fs');
-        if (fs.existsSync(oldPhotoPath)) {
-          fs.unlinkSync(oldPhotoPath);
-          console.log(`🗑️ Ancienne photo supprimée: ${oldPhotoPath}`);
+      // Upload vers Cloudinary
+      console.log('📤 Upload vers Cloudinary...');
+      const cloudinaryUrl = await this.cloudinaryService.uploadImage(file, 'kiwi-club/profiles');
+      console.log('📤 URL Cloudinary générée:', cloudinaryUrl);
+
+      // Supprimer l'ancienne photo Cloudinary si elle existe
+      if (currentUser?.photo && currentUser.photo.includes('cloudinary.com')) {
+        try {
+          const publicId = this.cloudinaryService.extractPublicId(currentUser.photo);
+          await this.cloudinaryService.deleteImage(publicId);
+          console.log(`🗑️ Ancienne photo Cloudinary supprimée: ${publicId}`);
+        } catch (error) {
+          console.log('⚠️ Erreur suppression ancienne photo:', error.message);
         }
       }
-
-      // Génère l'URL dynamique avec timestamp pour éviter le cache
-      console.log('📤 File object complet:', file);
-      console.log('📤 File filename:', file.filename);
-      const photoUrl = `/api/files/profiles/${file.filename}?t=${Date.now()}`;
-      console.log('📤 URL photo générée:', photoUrl);
       
-      // Met à jour le profil utilisateur avec l'URL
-      await this.userService.put(userId, { photo: photoUrl });
+      // Met à jour le profil utilisateur avec l'URL Cloudinary
+      await this.userService.put(userId, { photo: cloudinaryUrl });
       console.log('📤 Profil utilisateur mis à jour');
       
-      console.log(`📸 Nouvelle photo uploadée avec succès: ${photoUrl}`);
+      console.log(`📸 Nouvelle photo uploadée avec succès: ${cloudinaryUrl}`);
       return { 
         success: true,
-        photo: photoUrl,
-        message: 'Photo uploadée avec succès'
+        photo: cloudinaryUrl,
+        message: 'Photo uploadée avec succès sur Cloudinary'
       };
     } catch (error) {
       console.error('❌ Erreur détaillée lors de l\'upload de photo:', {
