@@ -78,9 +78,12 @@ export class MailService {
             port: 587,
             secure: false,
             auth: {
-              user: '09b04970de09d8',
-              pass: 'ecf22b0f9ee9a0',
+              user: '2a81d91e209a7a', // Nouveaux credentials
+              pass: '26efc0e208621a', // Nouveaux credentials
             },
+            connectionTimeout: 60000, // 60 secondes
+            greetingTimeout: 30000,   // 30 secondes
+            socketTimeout: 60000,     // 60 secondes
           });
           this.logger.log('✅ Transporter Mailtrap initialisé avec credentials par défaut');
         }
@@ -91,9 +94,12 @@ export class MailService {
           port: 587,
           secure: false,
           auth: {
-            user: '09b04970de09d8',
-            pass: 'ecf22b0f9ee9a0',
+            user: '2a81d91e209a7a', // Nouveaux credentials
+            pass: '26efc0e208621a', // Nouveaux credentials
           },
+          connectionTimeout: 60000, // 60 secondes
+          greetingTimeout: 30000,   // 30 secondes
+          socketTimeout: 60000,     // 60 secondes
         });
         this.logger.log('✅ Transporter Mailtrap initialisé avec credentials par défaut (fallback)');
       }
