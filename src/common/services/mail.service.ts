@@ -134,7 +134,19 @@ export class MailService {
       };
 
       this.logger.log(`📧 Options email:`, JSON.stringify(mailOptions, null, 2));
-      const info = await this.transporter.sendMail(mailOptions);
+      
+      // 🔍 DEBUG: Logs détaillés avant envoi
+      this.logger.log(`🔍 DEBUG: Début envoi email à ${to}`);
+      this.logger.log(`🔍 DEBUG: Transporter configuré:`, this.transporter ? 'OUI' : 'NON');
+      
+      let info;
+      try {
+        info = await this.transporter.sendMail(mailOptions);
+        this.logger.log(`🔍 DEBUG: Email envoyé avec succès - MessageId: ${info.messageId}`);
+      } catch (error) {
+        this.logger.error(`❌ DEBUG: Erreur envoi email à ${to}:`, error);
+        throw error; // Re-throw pour que l'appelant gère l'erreur
+      }
       
       // Vérifier si c'est un email d'annulation (toujours envoyer)
       const isCancellationEmail = subject.toLowerCase().includes('annulation') || 
