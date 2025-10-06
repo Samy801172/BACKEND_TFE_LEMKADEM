@@ -294,7 +294,7 @@ export class EventService {
    */
   async cancelEvent(id: string): Promise<{ success: boolean; message: string }> {
     try {
-      console.log('[EventService] Annulation de l\'événement:', id);
+      console.log('[EventService] 🚨 DÉBUT ANNULATION ÉVÉNEMENT:', id);
       
       // 1. Récupérer l'événement avec ses participations
       const event = await this.eventRepository.findOne({
@@ -333,7 +333,8 @@ export class EventService {
 
                 message += ' Un remboursement va vous être effectué sous peu.';
                 htmlMessage += '<p>Un remboursement va vous être effectué sous peu.</p>';
-                console.log('[EventService] Remboursement effectué pour:', participation.participant.email);
+                console.log('[EventService] ✅ Remboursement effectué pour:', participation.participant.email);
+                console.log('[EventService] 📧 Email avec info remboursement sera envoyé à:', participation.participant.email);
               } catch (err) {
                 console.error('[EventService] Erreur lors du remboursement pour:', participation.participant.email, err);
                 message += ' Une erreur est survenue lors du remboursement, veuillez contacter le support.';
@@ -341,7 +342,8 @@ export class EventService {
               }
             }
 
-            // Envoi de l'email de notification
+            // 🚨 IMPORTANT: Envoi de l'email de notification (toujours activé pour annulations)
+            console.log('[EventService] 📧 Envoi email annulation à:', participation.participant.email);
             await this.mailService.sendMail(
               participation.participant.email,
               `Annulation de l'événement "${event.title}"`,
@@ -349,7 +351,7 @@ export class EventService {
               htmlMessage
             );
             notificationCount++;
-            console.log('[EventService] Email d\'annulation envoyé à:', participation.participant.email);
+            console.log('[EventService] ✅ Email d\'annulation envoyé avec succès à:', participation.participant.email);
 
             // Envoi de notification push
             try {
