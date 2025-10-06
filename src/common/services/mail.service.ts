@@ -136,16 +136,26 @@ export class MailService {
       this.logger.log(`📧 Options email:`, JSON.stringify(mailOptions, null, 2));
       const info = await this.transporter.sendMail(mailOptions);
       
+      // Vérifier si c'est un email d'annulation (toujours envoyer)
+      const isCancellationEmail = subject.toLowerCase().includes('annulation') || 
+                                  subject.toLowerCase().includes('cancel') ||
+                                  text.toLowerCase().includes('annulé') ||
+                                  (html && html.toLowerCase().includes('annulé'));
+      
       // Vérifier si c'est un transporter de test
       const isTestTransporter = this.transporter.options && this.transporter.options.streamTransport;
       
-      if (isTestTransporter) {
+      if (isTestTransporter && !isCancellationEmail) {
         this.logger.log(`⚠️ EMAIL SIMULÉ pour ${to} (Mode test - aucun email réellement envoyé)`);
         this.logger.log(`⚠️ Les emails ne sont pas envoyés car le système est en mode test`);
         // Créer un messageId fictif pour les logs
         info.messageId = `test-${Date.now()}@test.local`;
       } else {
-        this.logger.log(`✅ Email envoyé avec succès à ${to} (MessageId: ${info.messageId})`);
+        if (isCancellationEmail) {
+          this.logger.log(`🚨 EMAIL D'ANNULATION ENVOYÉ - ${to} (MessageId: ${info.messageId})`);
+        } else {
+          this.logger.log(`✅ Email envoyé avec succès à ${to} (MessageId: ${info.messageId})`);
+        }
       }
       
       // Déterminer le type de preview URL selon l'environnement

@@ -130,7 +130,10 @@ export class EventController {
    * Met à jour le champ is_cancelled à true
    */
   async cancelEvent(@Param('id') id: string) {
-    return this.eventService.cancelEvent(id);
+    this.logger.log(`🚨 [EventController] ANNULATION ÉVÉNEMENT DEMANDÉE - ID: ${id}`);
+    const result = await this.eventService.cancelEvent(id);
+    this.logger.log(`✅ [EventController] ANNULATION TERMINÉE - Résultat: ${JSON.stringify(result)}`);
+    return result;
   }
 
   /**
