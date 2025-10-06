@@ -65,24 +65,13 @@ export class EventService {
     const savedEvent = await this.eventRepository.save(event);
     console.log('[EventService] ✅ Événement sauvegardé avec ID:', savedEvent.id);
 
-    // Récupérer tous les membres
-    const members = await this.userService.findAll();
-    console.log('[EventService] 📧 Envoi d\'emails à', members.length, 'membres...');
-
-    // Envoyer un email à chaque membre
-    for (const member of members) {
-      try {
-        await this.mailService.sendMail(
-          member.email, // Utiliser l'email du membre
-          'Nouvel événement créé',
-          `Un nouvel événement a été créé : ${createEventDto.title}`,
-          `<p>Un nouvel événement a été créé : <strong>${createEventDto.title}</strong></p>`
-        );
-        console.log('[EventService] ✅ Email envoyé à:', member.email);
-      } catch (error) {
-        console.error(`[EventService] ❌ Erreur lors de l'envoi de l'email à ${member.email}:`, error);
-      }
-    }
+    // TEMPORAIREMENT DÉSACTIVÉ : Envoi d'emails automatiques (cause de lenteur)
+    // TODO: Implémenter un système de notifications en arrière-plan
+    console.log('[EventService] ⚠️ Envoi d\'emails désactivé temporairement pour améliorer les performances');
+    
+    // Récupérer tous les membres (pour logs uniquement)
+    // const members = await this.userService.findAll();
+    // console.log('[EventService] 📧 Emails désactivés -', members.length, 'membres seraient notifiés');
 
     console.log('[EventService] 🎉 Création d\'événement terminée:', savedEvent.title);
     return savedEvent;
