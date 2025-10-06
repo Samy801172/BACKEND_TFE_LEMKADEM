@@ -235,7 +235,10 @@ export class UserController {
       }
       
       // Met à jour le profil utilisateur avec l'URL (Cloudinary ou locale)
-      await this.userService.put(userId, { photo: photoUrl });
+      console.log('📤 AVANT mise à jour - URL à sauvegarder:', photoUrl);
+      const updatedUser = await this.userService.put(userId, { photo: photoUrl });
+      console.log('📤 APRÈS mise à jour - Utilisateur mis à jour:', updatedUser ? 'OUI' : 'NON');
+      console.log('📤 APRÈS mise à jour - Photo en base:', updatedUser?.photo);
       console.log('📤 Profil utilisateur mis à jour');
       
       console.log(`📸 Nouvelle photo uploadée avec succès: ${photoUrl}`);

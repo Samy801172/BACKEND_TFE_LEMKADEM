@@ -150,8 +150,14 @@ export class UserService {
   }
 
   async put(id: string, updateUserDto: UpdateUserDto): Promise<User> {
+    console.log('🔄 UserService.put - Début mise à jour utilisateur:', id);
+    console.log('🔄 UserService.put - Données à mettre à jour:', updateUserDto);
+    
     const user = await this.userRepository.findOne({ where: { id } });
     if (!user) throw new NotFoundException('User not found');
+    
+    console.log('🔄 UserService.put - Utilisateur trouvé:', user.email);
+    console.log('🔄 UserService.put - Photo actuelle en base:', user.photo);
     
     // PROTECTION : Empêcher la modification du rôle via l'API de mise à jour
     const { type_user, ...safeUpdateData } = updateUserDto;
@@ -166,8 +172,12 @@ export class UserService {
       safeUpdateData.password = await encryptPassword(safeUpdateData.password);
     }
     
+    console.log('🔄 UserService.put - Données sécurisées à appliquer:', safeUpdateData);
     Object.assign(user, safeUpdateData);
-    await this.userRepository.save(user);
+    console.log('🔄 UserService.put - Utilisateur après assign:', user.photo);
+    
+    const savedUser = await this.userRepository.save(user);
+    console.log('🔄 UserService.put - Utilisateur sauvegardé:', savedUser.photo);
 
     // After saving the updated user, send a confirmation email (désactivé temporairement pour éviter les timeouts)
     try {
