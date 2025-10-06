@@ -344,14 +344,20 @@ export class EventService {
 
             // 🚨 IMPORTANT: Envoi de l'email de notification (toujours activé pour annulations)
             console.log('[EventService] 📧 Envoi email annulation à:', participation.participant.email);
-            await this.mailService.sendMail(
+            
+            // Envoyer l'email en arrière-plan (ne pas attendre)
+            this.mailService.sendMail(
               participation.participant.email,
               `Annulation de l'événement "${event.title}"`,
               message,
               htmlMessage
-            );
+            ).then(() => {
+              console.log('[EventService] ✅ Email d\'annulation envoyé avec succès à:', participation.participant.email);
+            }).catch((error) => {
+              console.error('[EventService] ❌ Erreur envoi email à:', participation.participant.email, error);
+            });
+            
             notificationCount++;
-            console.log('[EventService] ✅ Email d\'annulation envoyé avec succès à:', participation.participant.email);
 
             // Envoi de notification push
             try {
