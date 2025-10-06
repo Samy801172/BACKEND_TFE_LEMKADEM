@@ -75,15 +75,21 @@ export class UserService {
     // Vérifier si la photo existe, sinon utiliser l'image par défaut
     let photoUrl = user.photo;
     if (photoUrl) {
-      // Vérifier si le fichier existe sur le serveur
-      const fs = require('fs');
-      const path = require('path');
-      const photoPath = photoUrl.replace('/api/files/profiles/', './public/profiles/');
-      
-      if (!fs.existsSync(photoPath)) {
-        console.log(`⚠️ Photo manquante pour l'utilisateur ${id}: ${photoUrl}`);
-        console.log(`📁 Chemin vérifié: ${photoPath}`);
-        photoUrl = '/api/files/profiles/default.jpg';
+      // Si c'est une URL Cloudinary, on la garde telle quelle
+      if (photoUrl.includes('cloudinary.com')) {
+        console.log(`☁️ Photo Cloudinary détectée pour l'utilisateur ${id}: ${photoUrl}`);
+        // Pas de vérification locale pour Cloudinary
+      } else {
+        // Vérifier si le fichier existe sur le serveur (photos locales uniquement)
+        const fs = require('fs');
+        const path = require('path');
+        const photoPath = photoUrl.replace('/api/files/profiles/', './public/profiles/');
+        
+        if (!fs.existsSync(photoPath)) {
+          console.log(`⚠️ Photo locale manquante pour l'utilisateur ${id}: ${photoUrl}`);
+          console.log(`📁 Chemin vérifié: ${photoPath}`);
+          photoUrl = '/api/files/profiles/default.jpg';
+        }
       }
     } else {
       photoUrl = '/api/files/profiles/default.jpg';
