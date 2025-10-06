@@ -133,7 +133,8 @@ const bootstrap = async () => {
 
     swaggerConfiguration.config(app);
 
-    const port = process.env.PORT || 2024; // Utiliser le port de Render ou 2024 en local
+    // Forcer le port 2024 en développement local, ignorer PORT env pour le dev
+    const port = process.env.NODE_ENV === 'production' ? (process.env.PORT || 10000) : 2024;
     const logger: Logger = new Logger('Principal');
     
     try {
