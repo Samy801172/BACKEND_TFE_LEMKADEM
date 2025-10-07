@@ -26,6 +26,10 @@ services:
         value: "09b04970de09d8"
       - key: MAILTRAP_PASS
         value: "ecf22b0f9ee9a0"
+      - key: GMAIL_USER
+        value: "kiwiclub.notifications@gmail.com"
+      - key: GMAIL_APP_PASSWORD
+        value: "hktd fxmw oiqj kpny"
       - key: SENDGRID_API_KEY
         value: "SG.your-sendgrid-key"
       - key: STRIPE_SECRET_KEY
