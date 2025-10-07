@@ -33,9 +33,9 @@ services:
       - key: SENDGRID_API_KEY
         value: "SG.your-sendgrid-key"
       - key: STRIPE_SECRET_KEY
-        value: "sk_test_your-stripe-key"
+        sync: false
       - key: STRIPE_WEBHOOK_SECRET
-        value: "whsec_your-webhook-secret"
+        sync: false
       - key: FIREBASE_PROJECT_ID
         value: "kiwi-club-fcm"
       - key: FIREBASE_PRIVATE_KEY
