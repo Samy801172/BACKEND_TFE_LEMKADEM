@@ -34,7 +34,13 @@ const bootstrap = async () => {
           'http://localhost:60263', // Flutter web actuel
           'http://localhost:61013', // Flutter web actuel
           'http://localhost:8080',  // Port alternatif
-          'http://localhost:3000'   // Port alternatif
+          'http://localhost:3000',  // Port alternatif
+          'http://10.0.2.2:2024',   // Émulateur Android (localhost du host)
+          'http://10.0.2.2:10000',  // Émulateur Android (port Render)
+          'http://10.0.2.2',        // Émulateur Android (port par défaut)
+          'http://127.0.0.1:2024',  // Localhost alternatif
+          'http://127.0.0.1:10000', // Localhost alternatif Render
+          'http://127.0.0.1'        // Localhost alternatif
         ];
         // Autorise tous les ports localhost pour Flutter web
         if (
