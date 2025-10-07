@@ -1,5 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import * as nodemailer from 'nodemailer';
+import * as sgMail from '@sendgrid/mail';
+import * as fs from 'fs';
 
 interface PresenceConfirmationData {
   participantName: string;
@@ -14,6 +16,7 @@ interface PresenceConfirmationData {
 export class MailService {
   private readonly logger = new Logger(MailService.name);
   private transporter: nodemailer.Transporter | null = null;
+  private useSendGridAPI: boolean = false;
 
   // Stockage en mémoire des emails envoyés
   private sentEmails: Array<{
@@ -33,49 +36,29 @@ export class MailService {
   }
 
   /**
-   * Initialise le transporter SMTP selon l'environnement
-   * - Développement : Mailtrap (avec fallback vers mode test)
-   * - Production : SendGrid (avec fallback vers mode test)
-   * - Fallback : Mode test (aucun email réellement envoyé)
+   * Initialise le transporter selon l'environnement
+   * - Développement : Mailtrap SMTP
+   * - Production : SendGrid API (pas SMTP, pour éviter les timeouts Render)
+   * - Fallback : Mode test
    */
   private async initializeTransporter() {
     try {
       const isProduction = process.env.NODE_ENV === 'production';
       
       if (isProduction) {
-        // 🚀 PRIORITÉ 1 : SendGrid en production (100 emails/jour gratuits)
+        // 🚀 PRIORITÉ 1 : SendGrid API en production (évite les timeouts SMTP sur Render)
         if (process.env.SENDGRID_API_KEY && process.env.SENDGRID_API_KEY !== 'SG.your-sendgrid-key') {
-          this.transporter = nodemailer.createTransport({
-            host: 'smtp.sendgrid.net',
-            port: 587,
-            secure: false,
-            auth: {
-              user: 'apikey', // Toujours 'apikey' pour SendGrid
-              pass: process.env.SENDGRID_API_KEY, // API Key SendGrid
-            },
-          });
-          this.logger.log('✅ Transporter SendGrid initialisé pour la production');
-          return;
-        }
-        
-        // Fallback : Gmail SMTP si SendGrid n'est pas configuré
-        if (process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD) {
-          this.transporter = nodemailer.createTransport({
-            host: 'smtp.gmail.com',
-            port: 587,
-            secure: false,
-            auth: {
-              user: process.env.GMAIL_USER,
-              pass: process.env.GMAIL_APP_PASSWORD,
-            },
-          });
-          this.logger.log('⚠️ Transporter Gmail initialisé (fallback - timeouts possibles)');
+          sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+          this.useSendGridAPI = true;
+          this.transporter = null; // Pas besoin de transporter nodemailer
+          this.logger.log('✅ SendGrid API initialisée pour la production (pas SMTP, évite timeouts)');
           return;
         }
         
         // Si aucune config en production, on désactive les emails
         this.logger.warn('⚠️ Aucun service email configuré en production - Emails désactivés');
         this.transporter = null;
+        this.useSendGridAPI = false;
         return;
       } else if (!isProduction) {
         // Configuration Mailtrap pour le développement
@@ -150,87 +133,108 @@ export class MailService {
       this.logger.log(`📧 Sujet: ${subject}`);
       this.logger.log(`📧 Pièces jointes: ${attachments ? attachments.length : 0}`);
       
-      if (!this.transporter) {
-        this.logger.error('❌ Transporter non initialisé');
-        throw new Error('Service d\'envoi d\'emails non initialisé');
-      }
-
-      const mailOptions = {
-        from: 'kiwiclub.notifications@gmail.com',
-        to,
-        subject,
-        text,
-        html,
-        attachments
-      };
-
-      this.logger.log(`📧 Options email:`, JSON.stringify(mailOptions, null, 2));
+      const from = process.env.SENDGRID_FROM_EMAIL || 'kiwiclub.notifications@gmail.com';
       
-      // 🔍 DEBUG: Logs détaillés avant envoi
-      this.logger.log(`🔍 DEBUG: Début envoi email à ${to}`);
-      this.logger.log(`🔍 DEBUG: Transporter configuré:`, this.transporter ? 'OUI' : 'NON');
+      let info: any;
       
-      let info;
-      try {
-        if (!this.transporter) {
-          // Mode production sans transporter - simulation uniquement
-          this.logger.log(`⚠️ EMAIL SIMULÉ pour ${to} (Mode production - emails désactivés)`);
-          info = { messageId: `sim-${Date.now()}@kiwiclub.be` };
-        } else {
-          info = await this.transporter.sendMail(mailOptions);
-          this.logger.log(`🔍 DEBUG: Email envoyé avec succès - MessageId: ${info.messageId}`);
-        }
-      } catch (error) {
-        this.logger.error(`❌ DEBUG: Erreur envoi email à ${to}:`, error);
+      // 🚀 Utiliser SendGrid API en production (évite les timeouts SMTP)
+      if (this.useSendGridAPI) {
+        this.logger.log(`🚀 Utilisation de SendGrid API (pas SMTP)`);
         
-        // Gestion spéciale des timeouts - ne pas faire échouer l'application
-        if (error.code === 'ETIMEDOUT' || error.message.includes('timeout')) {
-          this.logger.warn(`⚠️ Timeout SMTP - Email simulé pour ${to}`);
-          info = { messageId: `timeout-${Date.now()}@kiwiclub.be` };
-        } else {
-          throw error; // Re-throw pour les autres erreurs
+        try {
+          const msg: any = {
+            to,
+            from,
+            subject,
+            text,
+            html: html || text,
+          };
+          
+          // Gestion des pièces jointes (conversion pour SendGrid API)
+          if (attachments && attachments.length > 0) {
+            msg.attachments = attachments.map((att: any) => {
+              // Si l'attachement a un 'path', lire le fichier
+              if (att.path && fs.existsSync(att.path)) {
+                const content = fs.readFileSync(att.path).toString('base64');
+                return {
+                  content,
+                  filename: att.filename,
+                  type: att.contentType || 'application/pdf',
+                  disposition: 'attachment',
+                };
+              }
+              // Sinon, utiliser le contenu fourni
+              return {
+                content: att.content || '',
+                filename: att.filename,
+                type: att.contentType || 'application/pdf',
+                disposition: 'attachment',
+              };
+            });
+          }
+          
+          this.logger.log(`📧 SendGrid API - Envoi à ${to}`);
+          await sgMail.send(msg);
+          
+          info = { messageId: `sendgrid-${Date.now()}@kiwiclub.be` };
+          this.logger.log(`✅ Email envoyé via SendGrid API à ${to}`);
+          
+        } catch (error) {
+          this.logger.error(`❌ Erreur SendGrid API:`, error);
+          throw error;
         }
-      }
-      
-      // Vérifier si c'est un email d'annulation (toujours envoyer)
-      const isCancellationEmail = subject.toLowerCase().includes('annulation') || 
-                                  subject.toLowerCase().includes('cancel') ||
-                                  text.toLowerCase().includes('annulé') ||
-                                  (html && html.toLowerCase().includes('annulé'));
-      
-      // Vérifier si c'est un transporter de test
-      const isTestTransporter = this.transporter.options && this.transporter.options.streamTransport;
-      
-      if (isTestTransporter && !isCancellationEmail) {
-        this.logger.log(`⚠️ EMAIL SIMULÉ pour ${to} (Mode test - aucun email réellement envoyé)`);
-        this.logger.log(`⚠️ Les emails ne sont pas envoyés car le système est en mode test`);
-        // Créer un messageId fictif pour les logs
-        info.messageId = `test-${Date.now()}@test.local`;
+        
+      } 
+      // 📧 Utiliser SMTP nodemailer en développement (Mailtrap)
+      else if (this.transporter) {
+        const mailOptions = {
+          from,
+          to,
+          subject,
+          text,
+          html,
+          attachments
+        };
+
+        this.logger.log(`📧 SMTP Nodemailer - Envoi à ${to}`);
+        
+        try {
+          info = await this.transporter.sendMail(mailOptions);
+          this.logger.log(`✅ Email envoyé via SMTP à ${to} (MessageId: ${info.messageId})`);
+        } catch (error) {
+          this.logger.error(`❌ Erreur SMTP:`, error);
+          
+          // Gestion des timeouts
+          if (error.code === 'ETIMEDOUT' || error.message.includes('timeout')) {
+            this.logger.warn(`⚠️ Timeout SMTP - Email simulé pour ${to}`);
+            info = { messageId: `timeout-${Date.now()}@kiwiclub.be` };
+          } else {
+            throw error;
+          }
+        }
+        
       } else {
-        if (isCancellationEmail) {
-          this.logger.log(`🚨 EMAIL D'ANNULATION ENVOYÉ - ${to} (MessageId: ${info.messageId})`);
-        } else {
-          this.logger.log(`✅ Email envoyé avec succès à ${to} (MessageId: ${info.messageId})`);
-        }
+        // Aucun service configuré - simulation
+        this.logger.warn(`⚠️ EMAIL SIMULÉ pour ${to} (Aucun service configuré)`);
+        info = { messageId: `sim-${Date.now()}@kiwiclub.be` };
       }
       
-      // Déterminer le type de preview URL selon l'environnement
+      // Log de confirmation
+      const isCancellationEmail = subject.toLowerCase().includes('annulation');
+      if (isCancellationEmail) {
+        this.logger.log(`🚨 EMAIL D'ANNULATION ENVOYÉ - ${to} (MessageId: ${info.messageId})`);
+      }
+      
+      // Déterminer preview URL
       const isProduction = process.env.NODE_ENV === 'production';
       let previewUrl: string | undefined;
       
-      if (isTestTransporter) {
-        this.logger.log(`🔗 Mode test activé - aucun email réellement envoyé`);
-      } else if (isProduction) {
-        // En production, pas de preview URL (SendGrid)
-        this.logger.log(`🔗 Email envoyé via SendGrid (production)`);
+      if (isProduction) {
+        this.logger.log(`🔗 Email envoyé en production (SendGrid API)`);
       } else {
-        // En développement, utiliser Mailtrap
         previewUrl = `https://mailtrap.io/inboxes/default/messages`;
         this.logger.log(`🔗 Aperçu Mailtrap: ${previewUrl}`);
       }
-
-      // Récupère l'expéditeur (from) pour l'enregistrer avec l'email
-      const from = mailOptions.from || 'kiwiclub.notifications@gmail.com';
 
       // Stocke l'email envoyé dans le tableau en mémoire
       this.sentEmails.unshift({
