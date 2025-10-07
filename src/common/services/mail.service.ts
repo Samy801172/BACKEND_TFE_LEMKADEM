@@ -43,32 +43,40 @@ export class MailService {
       const isProduction = process.env.NODE_ENV === 'production';
       
       if (isProduction) {
-        // En production, on utilise Gmail SMTP (plus fiable que Mailtrap sur Render)
-        this.transporter = nodemailer.createTransport({
-          host: 'smtp.gmail.com',
-          port: 587,
-          secure: false,
-          auth: {
-            user: process.env.GMAIL_USER || 'lemkadem72@gmail.com',
-            pass: process.env.GMAIL_APP_PASSWORD || 'votre-app-password-gmail',
-          },
-        });
-        this.logger.log('✅ Transporter Gmail initialisé pour la production');
+        // 🚀 PRIORITÉ 1 : SendGrid en production (100 emails/jour gratuits)
+        if (process.env.SENDGRID_API_KEY && process.env.SENDGRID_API_KEY !== 'SG.your-sendgrid-key') {
+          this.transporter = nodemailer.createTransport({
+            host: 'smtp.sendgrid.net',
+            port: 587,
+            secure: false,
+            auth: {
+              user: 'apikey', // Toujours 'apikey' pour SendGrid
+              pass: process.env.SENDGRID_API_KEY, // API Key SendGrid
+            },
+          });
+          this.logger.log('✅ Transporter SendGrid initialisé pour la production');
+          return;
+        }
+        
+        // Fallback : Gmail SMTP si SendGrid n'est pas configuré
+        if (process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD) {
+          this.transporter = nodemailer.createTransport({
+            host: 'smtp.gmail.com',
+            port: 587,
+            secure: false,
+            auth: {
+              user: process.env.GMAIL_USER,
+              pass: process.env.GMAIL_APP_PASSWORD,
+            },
+          });
+          this.logger.log('⚠️ Transporter Gmail initialisé (fallback - timeouts possibles)');
+          return;
+        }
+        
+        // Si aucune config en production, on désactive les emails
+        this.logger.warn('⚠️ Aucun service email configuré en production - Emails désactivés');
+        this.transporter = null;
         return;
-      }
-      
-      if (isProduction && process.env.SENDGRID_API_KEY) {
-        // Configuration SendGrid pour la production
-        this.transporter = nodemailer.createTransport({
-          host: 'smtp.sendgrid.net',
-          port: 587,
-          secure: false,
-          auth: {
-            user: 'apikey', // Toujours 'apikey' pour SendGrid
-            pass: process.env.SENDGRID_API_KEY, // API Key SendGrid
-          },
-        });
-        this.logger.log('✅ Transporter SendGrid initialisé pour la production');
       } else if (!isProduction) {
         // Configuration Mailtrap pour le développement
         const mailtrapUser = process.env.MAILTRAP_USER || '837aee6518510e';
