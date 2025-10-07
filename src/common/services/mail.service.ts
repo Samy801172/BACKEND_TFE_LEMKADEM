@@ -148,7 +148,7 @@ export class MailService {
       }
 
       const mailOptions = {
-        from: 'no-reply@kiwiclub.be',
+        from: 'kiwiclub.notifications@gmail.com',
         to,
         subject,
         text,
@@ -222,7 +222,7 @@ export class MailService {
       }
 
       // Récupère l'expéditeur (from) pour l'enregistrer avec l'email
-      const from = mailOptions.from || 'no-reply@monapp.com';
+      const from = mailOptions.from || 'kiwiclub.notifications@gmail.com';
 
       // Stocke l'email envoyé dans le tableau en mémoire
       this.sentEmails.unshift({
