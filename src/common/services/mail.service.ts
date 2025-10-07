@@ -43,25 +43,17 @@ export class MailService {
       const isProduction = process.env.NODE_ENV === 'production';
       
       if (isProduction) {
-        // En production, on utilise Mailtrap avec des timeouts plus longs
+        // En production, on utilise Gmail SMTP (plus fiable que Mailtrap sur Render)
         this.transporter = nodemailer.createTransport({
-          host: 'sandbox.smtp.mailtrap.io',
+          host: 'smtp.gmail.com',
           port: 587,
           secure: false,
           auth: {
-            user: process.env.MAILTRAP_USER || '09b04970de09d8',
-            pass: process.env.MAILTRAP_PASS || 'ecf22b0f9ee9a0',
+            user: process.env.GMAIL_USER || 'lemkadem72@gmail.com',
+            pass: process.env.GMAIL_APP_PASSWORD || 'votre-app-password-gmail',
           },
-          connectionTimeout: 30000,  // 30 secondes
-          greetingTimeout: 30000,    // 30 secondes
-          socketTimeout: 60000,      // 60 secondes
-          pool: true,                // Utiliser le pool de connexions
-          maxConnections: 5,         // Max 5 connexions simultanées
-          maxMessages: 100,          // Max 100 messages par connexion
-          rateDelta: 20000,          // Attendre 20s entre les envois
-          rateLimit: 5,              // Max 5 emails par rateDelta
         });
-        this.logger.log('✅ Transporter Mailtrap initialisé pour la production avec timeouts étendus');
+        this.logger.log('✅ Transporter Gmail initialisé pour la production');
         return;
       }
       
@@ -79,10 +71,10 @@ export class MailService {
         this.logger.log('✅ Transporter SendGrid initialisé pour la production');
       } else if (!isProduction) {
         // Configuration Mailtrap pour le développement
-        const mailtrapUser = process.env.MAILTRAP_USER || '09b04970de09d8';
+        const mailtrapUser = process.env.MAILTRAP_USER || '837aee6518510e';
 
 
-        const mailtrapPass = process.env.MAILTRAP_PASS || 'ecf22b0f9ee9a0';
+        const mailtrapPass = process.env.MAILTRAP_PASS || '0d349a1788b217';
         
         // Vérifier si les credentials Mailtrap sont disponibles
         if (mailtrapUser && mailtrapPass) {
