@@ -48,7 +48,7 @@ export class NotificationService {
 
       const msg = {
         to,
-        from: process.env.SENDGRID_FROM_EMAIL || 'noreply@kiwiclub.be',
+        from: process.env.SENDGRID_FROM_EMAIL || 'kiwiclub.notifications@gmail.com',
         subject,
         text: textContent,
         html: htmlContent,
