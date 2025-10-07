@@ -65,13 +65,35 @@ export class EventService {
     const savedEvent = await this.eventRepository.save(event);
     console.log('[EventService] ✅ Événement sauvegardé avec ID:', savedEvent.id);
 
-    // TEMPORAIREMENT DÉSACTIVÉ : Envoi d'emails automatiques (cause de lenteur)
-    // TODO: Implémenter un système de notifications en arrière-plan
-    console.log('[EventService] ⚠️ Envoi d\'emails désactivé temporairement pour améliorer les performances');
-    
-    // Récupérer tous les membres (pour logs uniquement)
-    // const members = await this.userService.findAll();
-    // console.log('[EventService] 📧 Emails désactivés -', members.length, 'membres seraient notifiés');
+    // Envoi d'emails de notification à tous les membres
+    try {
+      const members = await this.userService.findAll();
+      console.log('[EventService] 📧 Envoi d\'emails de notification à', members.length, 'membres');
+      
+      for (const member of members) {
+        await this.mailService.sendMail(
+          member.email,
+          `Nouvel événement : ${savedEvent.title}`,
+          `Un nouvel événement "${savedEvent.title}" a été créé le ${new Date(savedEvent.date).toLocaleDateString('fr-FR')} à ${savedEvent.location}.`,
+          `
+            <h2>Nouvel événement disponible !</h2>
+            <p>Bonjour ${member.prenom || member.nom || 'Membre'},</p>
+            <p>Un nouvel événement a été créé :</p>
+            <ul>
+              <li><strong>Titre :</strong> ${savedEvent.title}</li>
+              <li><strong>Date :</strong> ${new Date(savedEvent.date).toLocaleDateString('fr-FR')}</li>
+              <li><strong>Lieu :</strong> ${savedEvent.location}</li>
+              <li><strong>Prix :</strong> ${savedEvent.price}€</li>
+            </ul>
+            <p>Connectez-vous à l'application pour vous inscrire !</p>
+            <p>Cordialement,<br>L'équipe Kiwi Club</p>
+          `
+        );
+      }
+      console.log('[EventService] ✅ Emails de notification envoyés avec succès');
+    } catch (error) {
+      console.error('[EventService] ❌ Erreur lors de l\'envoi des emails:', error);
+    }
 
     console.log('[EventService] 🎉 Création d\'événement terminée:', savedEvent.title);
     return savedEvent;
