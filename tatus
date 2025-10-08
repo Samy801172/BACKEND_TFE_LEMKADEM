@@ -1,0 +1,40 @@
+[1mdiff --git a/src/model/Event/services/event.service.ts b/src/model/Event/services/event.service.ts[m
+[1mindex d5984b0..f17e88c 100644[m
+[1m--- a/src/model/Event/services/event.service.ts[m
+[1m+++ b/src/model/Event/services/event.service.ts[m
+[36m@@ -30,9 +30,15 @@[m [mexport class EventService {[m
+ [m
+   // Méthode pour récupérer tous les événements[m
+   async findAll(): Promise<Event[]> {[m
+[31m-    return await this.eventRepository.find({[m
+[32m+[m[32m    const events = await this.eventRepository.find({[m
+       relations: ['organizer', 'participations'][m
+     });[m
+[32m+[m[41m    [m
+[32m+[m[32m    // Ajouter le nombre de participants actuels à chaque événement[m
+[32m+[m[32m    return events.map(event => ({[m
+[32m+[m[32m      ...event,[m
+[32m+[m[32m      current_participants: event.participations.length[m
+[32m+[m[32m    }));[m
+   }[m
+ [m
+   // Méthode pour créer un événement[m
+[36m@@ -202,12 +208,17 @@[m [mexport class EventService {[m
+       const events = await this.eventRepository[m
+         .createQueryBuilder('event')[m
+         .leftJoinAndSelect('event.organizer', 'organizer')[m
+[32m+[m[32m        .leftJoinAndSelect('event.participations', 'participations')[m
+         .where('event.date > :currentDate', { currentDate })[m
+         .andWhere('event.is_cancelled = :isCancelled', { isCancelled: false })[m
+         .orderBy('event.date', 'ASC')[m
+         .getMany();[m
+ [m
+[31m-      return events;[m
+[32m+[m[32m      // Ajouter le nombre de participants actuels à chaque événement[m
+[32m+[m[32m      return events.map(event => ({[m
+[32m+[m[32m        ...event,[m
+[32m+[m[32m        current_participants: event.participations.length[m
+[32m+[m[32m      }));[m
+     } catch (error) {[m
+       throw error;[m
+     }[m
