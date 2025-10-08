@@ -30,9 +30,15 @@ export class EventService {
 
   // Méthode pour récupérer tous les événements
   async findAll(): Promise<Event[]> {
-    return await this.eventRepository.find({
+    const events = await this.eventRepository.find({
       relations: ['organizer', 'participations']
     });
+    
+    // Ajouter le nombre de participants actuels à chaque événement
+    return events.map(event => ({
+      ...event,
+      current_participants: event.participations.length
+    }));
   }
 
   // Méthode pour créer un événement
@@ -202,12 +208,17 @@ export class EventService {
       const events = await this.eventRepository
         .createQueryBuilder('event')
         .leftJoinAndSelect('event.organizer', 'organizer')
+        .leftJoinAndSelect('event.participations', 'participations')
         .where('event.date > :currentDate', { currentDate })
         .andWhere('event.is_cancelled = :isCancelled', { isCancelled: false })
         .orderBy('event.date', 'ASC')
         .getMany();
 
-      return events;
+      // Ajouter le nombre de participants actuels à chaque événement
+      return events.map(event => ({
+        ...event,
+        current_participants: event.participations.length
+      }));
     } catch (error) {
       throw error;
     }
