@@ -824,7 +824,7 @@ export class PaymentService {
               </div>
               
               <div style="background: #333; color: white; padding: 15px; text-align: center; font-size: 12px;">
-                <p>© 2024 Kiwi Club. Tous droits réservés.</p>
+                <p>© ${new Date().getFullYear()} Kiwi Club. Tous droits réservés.</p>
               </div>
             </div>
             `,
