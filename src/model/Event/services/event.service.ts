@@ -215,10 +215,13 @@ export class EventService {
         .getMany();
 
       // Ajouter le nombre de participants actuels à chaque événement
-      return events.map(event => ({
+      const eventsWithParticipants = events.map(event => ({
         ...event,
         current_participants: event.participations.length
       }));
+      
+      console.log(`[EventService] getUpcomingEvents - ${eventsWithParticipants.length} événements avec current_participants`);
+      return eventsWithParticipants;
     } catch (error) {
       throw error;
     }
