@@ -537,8 +537,9 @@ export class PaymentService {
         await this.notifyEventFull(payment.event);
       }
 
-      // 5. Génération et enregistrement de la facture PDF
-      const invoicePath = `uploads/invoices/invoice-${payment.id}.pdf`;
+      // 5. Génération et enregistrement de la facture PDF (numéro court)
+      const shortId = payment.id.slice(-8); // 8 derniers caractères de l'ID
+      const invoicePath = `uploads/invoices/invoice-${shortId}.pdf`;
       await this.generateInvoicePDF(payment, invoicePath);
 
       // 6. Envoi d'email de confirmation avec facture PDF
@@ -1054,7 +1055,7 @@ export class PaymentService {
       // Numéro de facture et date
       doc.fillColor('black');
       doc.fontSize(16).text('FACTURE', 400, 20, { align: 'right' });
-      doc.fontSize(10).text(`N° ${payment.reference}`, 400, 40, { align: 'right' });
+      doc.fontSize(10).text(`N° ${payment.reference.slice(-8)}`, 400, 40, { align: 'right' });
       doc.text(`Date: ${new Date().toLocaleDateString('fr-FR')}`, 400, 55, { align: 'right' });
 
       // Ligne de séparation

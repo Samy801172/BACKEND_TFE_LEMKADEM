@@ -198,8 +198,8 @@ export class DocumentController {
       if (!invoice || !invoice.file_url || !fs.existsSync(path.resolve(invoice.file_url))) {
         this.logger.log(`🔍 DEBUG: Aucune facture trouvée pour l'utilisateur ${user.userId}, création d'une facture spécifique à l'événement`);
         
-        // Générer un nom de fichier unique pour cette facture
-        const invoiceId = require('crypto').randomUUID();
+        // Générer un nom de fichier unique pour cette facture (numéro court)
+        const invoiceId = Date.now().toString().slice(-8); // 8 derniers chiffres du timestamp
         const fileName = `invoice-${invoiceId}.pdf`;
         const filePath = path.join('./uploads/invoices', fileName);
         
@@ -290,7 +290,8 @@ export class DocumentController {
       // Numéro de facture et date
       doc.fillColor('black');
       doc.fontSize(16).text('FACTURE', 400, 20, { align: 'right' });
-      doc.fontSize(10).text(`N° ${participation.id || 'INV-' + Date.now()}`, 400, 40, { align: 'right' });
+      const shortId = (participation.id || 'INV-' + Date.now()).slice(-8);
+      doc.fontSize(10).text(`N° ${shortId}`, 400, 40, { align: 'right' });
       doc.text(`Date: ${new Date().toLocaleDateString('fr-FR')}`, 400, 55, { align: 'right' });
 
       // Ligne de séparation
