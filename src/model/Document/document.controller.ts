@@ -318,7 +318,15 @@ export class DocumentController {
       doc.fillColor('black');
       doc.fontSize(12).text(`${event.title || 'N/A'}`, 50, 240);
       doc.text(`Date: ${event.date ? new Date(event.date).toLocaleDateString('fr-FR') : 'N/A'}`, 50, 255);
-      doc.text(`Heure: ${event.startTime || 'N/A'} - ${event.endTime || 'N/A'}`, 50, 270);
+      // Extraire l'heure du champ date
+      let timeText = 'N/A - N/A';
+      if (event.date) {
+        const eventDate = new Date(event.date);
+        const startTime = eventDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+        const endTime = new Date(eventDate.getTime() + 2 * 60 * 60 * 1000).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+        timeText = `${startTime} - ${endTime}`;
+      }
+      doc.text(`Heure: ${timeText}`, 50, 270);
       doc.text(`Lieu: ${event.location || 'N/A'}`, 50, 285);
       if (event.description) {
         doc.text(`Description: ${event.description.substring(0, 100)}${event.description.length > 100 ? '...' : ''}`, 50, 300);
