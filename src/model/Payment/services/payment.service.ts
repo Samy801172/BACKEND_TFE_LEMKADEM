@@ -228,8 +228,8 @@ export class PaymentService {
       // Pour mobile, utiliser une URL de deep linking vers l'écran de succès
       const isProduction = process.env.NODE_ENV === 'production';
       
-      // FORCER le deep link mobile pour tous les paiements
-      const successBaseUrl = 'kiwiclub://payment-success';
+      // FORCER le deep link mobile pour tous les paiements (pas d'écran web)
+      const successBaseUrl = 'kiwiclub://payment-success-mobile';
       
       console.log('[Stripe] Deep link mobile forcé:', successBaseUrl);
       
